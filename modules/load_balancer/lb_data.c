@@ -431,7 +431,7 @@ static int get_dst_load(struct lb_resource **res, unsigned int res_no,
 		} else if( flags & LB_FLAGS_PERCENT_WITH_CPU ) {
 			/* generate score based on the percentage of channels occupied, reduced by CPU idle factor */
 			if( dst->rmap[l].current_sessions && dst->rmap[l].max_sessions && dst->rmap[l].cpu_idle ) {
-				av = ( 100 - ( 100 * ( dst->rmap[l].current_sessions + dst->rmap[l].sessions_since_last_heartbeat ) / dst->rmap[l].max_sessions ) ) * dst->rmap[l].cpu_idle
+				av = ( 100 - ( 100 * ( dst->rmap[l].current_sessions + dst->rmap[l].sessions_since_last_heartbeat ) / dst->rmap[l].max_sessions ) ) * dst->rmap[l].cpu_idle;
             }
 		} else {
 			av = dst->rmap[l].max_load - lb_dlg_binds.get_profile_size(res[k]->profile, &dst->profile_id);
@@ -499,7 +499,7 @@ int lb_route(struct sip_msg *req, int group, struct lb_res_str_list *rl,
 	struct lb_resource *it_r;
 	int load, it_l;
 	int i, j, cond, cnt_aval_dst;
-
+	unsigned int k, l;
 
 	/* init control vars state */
 	res_cur = NULL;
@@ -842,9 +842,8 @@ int lb_route(struct sip_msg *req, int group, struct lb_res_str_list *rl,
 					if( res_cur[k] == dst->rmap[l].resource ) {
 						dst->rmap[l].sessions_since_last_heartbeat++;
 
-						LM_DBG("Incrementing sess since last HB for winning destination %d <%.*s> "
-							"(sessions_since_last_heartbeat=%d)\n",
-							dst->id, dst->uri.len, dst->uri.s, dst->sessions_since_last_heartbeat );
+						LM_DBG("Incrementing sess since last HB for winning destination %d <%.*s> (sessions_since_last_heartbeat=%d)\n",
+							dst->id, dst->uri.len, dst->uri.s, dst->rmap[l].sessions_since_last_heartbeat );
 
 						break; // exit the loop
 					}

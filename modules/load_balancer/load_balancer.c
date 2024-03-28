@@ -807,19 +807,20 @@ static void lb_update_max_loads(unsigned int ticks, void *param)
 				            dst->rmap[ri].resource->profile, &dst->profile_id);
 				old = dst->rmap[ri].max_load;
 
-				if ( flags & LB_FLAGS_PERCENT_WITH_CPU ) {
-					/*
-					 * In this mode we capture the raw values and use these in each LB calculation. This
-					 * means we do not use profile counting in the load calculation. This is suitable for
-					 * architectures where many unreplicated OpenSIPs instances feed calls into the same pool
-					 * of FreeSWITCH instances.
-					 */
-					dst->rmap[ri].max_sessions = dst->fs_sock->stats.max_sess;
-					dst->rmap[ri].current_sessions = dst->fs_sock->stats.sess;
-					dst->rmap[ri].cpu_idle = dst->fs_sock->stats.id_cpu / (float)100;
-					/* reset sessions since last heartbeat counter */
-					dst->rmap[ri].sessions_since_last_heartbeat = 0;
-				} else if (psz < dst->fs_sock->stats.max_sess) {
+				// if ( flags & LB_FLAGS_PERCENT_WITH_CPU ) { todo flags not avavilable here
+				/*
+				 * In LB_FLAGS_PERCENT_WITH_CPU mode we capture the raw values and use these in each LB calculation. This
+				 * means we do not use profile counting in the load calculation. This is suitable for
+				 * architectures where many unreplicated OpenSIPs instances feed calls into the same pool
+				 * of FreeSWITCH instances.
+				 */
+				dst->rmap[ri].max_sessions = dst->fs_sock->stats.max_sess;
+				dst->rmap[ri].current_sessions = dst->fs_sock->stats.sess;
+				dst->rmap[ri].cpu_idle = dst->fs_sock->stats.id_cpu / (float)100;
+				/* reset sessions since last heartbeat counter */
+				dst->rmap[ri].sessions_since_last_heartbeat = 0;
+
+				if (psz < dst->fs_sock->stats.max_sess) {
 					/*
 					 * The normal case. OpenSIPS sees, at _most_, the same number
 					 * of sessions as FreeSWITCH does. Any differences must be
