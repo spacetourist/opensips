@@ -765,8 +765,6 @@ int lb_route(struct sip_msg *req, int group, struct lb_res_str_list *rl,
 	cnt_aval_dst = 0;
 	for( it_d=data->dsts,i=0,j=0 ; it_d ; it_d=it_d->next ) {
 		if( it_d->group == group ) {
-			if( (dst_bitmap_cur[i] & (1 << j)) &&
-			((it_d->flags & LB_DST_STAT_DSBL_FLAG) == 0) ) {
 			if( (dst_bitmap_cur[i] & (1 << j)) && ((it_d->flags & LB_DST_STAT_DSBL_FLAG) == 0) ) {
 				/* valid destination (group & resources & status) */
 				cnt_aval_dst++;
