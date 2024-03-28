@@ -65,7 +65,7 @@ struct lb_resource_map {
 
 	unsigned int max_sessions; /* Raw data from HEARTBEART */
 	unsigned int current_sessions; /* Raw data from HEARTBEART */
-	unsigned int cpu_idle; /* Raw data from HEARTBEART */
+	float cpu_idle; /* Raw data from HEARTBEART */
 
 	unsigned int sessions_since_last_heartbeat; /* Count of sessions allocated since last FS heartbeat */
 
