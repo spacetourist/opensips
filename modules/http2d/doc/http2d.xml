@@ -3,8 +3,7 @@
 "http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
 
 
-<!ENTITY admin SYSTEM "dbops_admin.xml">
-<!ENTITY faq SYSTEM "../../../doc/module_faq.xml">
+<!ENTITY admin SYSTEM "http2d_admin.xml">
 <!ENTITY contrib SYSTEM "contributors.xml">
 
 <!-- Include general documentation entities -->
@@ -15,16 +14,14 @@
 
 <book>
 	<bookinfo>
-	<title>DBops Module</title>
+	<title>HTTP2D MODULE</title>
 	<productname class="trade">&osipsname;</productname>
 	</bookinfo>
 	<toc></toc>
 
 	&admin;
-	&faq;
 	&contrib;
 
 	&docCopyrights;
-	<para>&copyright; 2009-2012 &osipssol;</para>
-	<para>&copyright; 2004-2008 &voicesystem;</para>
+	<para>&copyright; 2024 &osipssol;</para>
 </book>

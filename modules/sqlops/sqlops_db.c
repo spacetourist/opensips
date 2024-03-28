@@ -30,8 +30,9 @@
 #include "../../db/db_insertq.h"
 #include "../../dprint.h"
 #include "../../route.h"
-#include "dbops_parse.h"
-#include "dbops_db.h"
+#include "../../map.h"
+#include "sqlops_parse.h"
+#include "sqlops_db.h"
 
 
 static str       def_table;    /* default DB table */
@@ -44,6 +45,8 @@ static db_val_t   vals_cmp[3]; /* statement as in "select" and "delete" */
 static struct db_scheme  *db_scheme_list=0;
 
 struct db_url *default_db_url = NULL;
+
+int query_id_max_len = 1024;
 
 /* array of db urls */
 static struct db_url *db_urls = NULL;  /* array of database urls */
@@ -124,7 +127,7 @@ int add_db_url(modparam_t type, void *val)
 
 
 
-int dbops_db_bind(void)
+int sqlops_db_bind(void)
 {
 	unsigned int i;
 
@@ -138,7 +141,7 @@ int dbops_db_bind(void)
 
 		if (!DB_CAPABILITY(db_urls[i].dbf, DB_CAP_ALL)) {
 			LM_CRIT("database modules (%.*s) does not "
-				"provide all functions needed by dbops module\n",
+				"provide all functions needed by sqlops module\n",
 				db_urls[i].url.len,db_urls[i].url.s);
 			return -1;
 		}
@@ -146,7 +149,7 @@ int dbops_db_bind(void)
 
 	/*
 	 * we cannot catch the default DB url usage at fixup time
-	 * as we do with the other bunch of extra dbops DB URLs
+	 * as we do with the other bunch of extra sqlops DB URLs
 	 *
 	 * so just dig through the whole script tree
 	 */
@@ -170,7 +173,7 @@ int dbops_db_bind(void)
 }
 
 
-int dbops_db_init(const str* db_table, str** db_cols)
+int sqlops_db_init(const str* db_table, str** db_cols)
 {
 	int i;
 
@@ -333,7 +336,7 @@ static inline int prepare_selection( str *uuid, str *username, str *domain,
 }
 
 
-db_res_t *db_avp_load(struct db_url *url, str *uuid, str *username,str *domain,
+db_res_t *sql_avp_load(struct db_url *url, str *uuid, str *username,str *domain,
 					char *attr, const str *table, struct db_scheme *scheme)
 {
 	static db_key_t   keys_ret[3];
@@ -377,7 +380,7 @@ void db_close_query(struct db_url *url, db_res_t *res )
 }
 
 
-int db_avp_store(struct db_url *url, db_key_t *keys, db_val_t *vals,
+int sql_avp_store(struct db_url *url, db_key_t *keys, db_val_t *vals,
 													int n, const str *table)
 {
 	int r;
@@ -399,7 +402,7 @@ int db_avp_store(struct db_url *url, db_key_t *keys, db_val_t *vals,
 
 
 
-int db_avp_delete(struct db_url *url, str *uuid, str *username, str *domain,
+int sql_avp_delete(struct db_url *url, str *uuid, str *username, str *domain,
 												char *attr, const str *table)
 {
 	unsigned int  nr_keys_cmp;
@@ -419,7 +422,7 @@ int db_avp_delete(struct db_url *url, str *uuid, str *username, str *domain,
 }
 
 
-int db_query(struct db_url *url, struct sip_msg *msg, str *query,
+int sql_query(struct db_url *url, struct sip_msg *msg, str *query,
 											pvname_list_t* dest,  int one_row)
 {
 	db_res_t* db_res = NULL;
@@ -462,6 +465,551 @@ int db_query(struct db_url *url, struct sip_msg *msg, str *query,
 	}
 
 	db_close_query( url, db_res );
+	return 0;
+}
+
+
+static inline int _json_to_cols(cJSON *Jcols, db_key_t** _c)
+{
+	static db_key_t *cols;
+	static unsigned int cols_size = 0;
+	cJSON *col;
+	str *str_cols;
+	int nc, i;
+
+	if (Jcols->type != cJSON_Array) {
+		LM_ERR("bad JSON format, 'cols' must be an array\n");
+		goto error;
+	}
+
+	/* iterate the columns to check and validate */
+	for( col=Jcols->child,nc=0 ; col ; col=col->next,nc++ ) {
+		if (col->type!=cJSON_String) {
+			LM_ERR("bad JSON format, 'cols' elements must be strings\n");
+			goto error;
+		}
+	}
+
+	/* resize the array of cols if we need more */
+	if (nc>cols_size) {
+		/* need a larger set of cols/keys */
+		cols = (db_key_t*)pkg_realloc( cols, nc*(sizeof(db_key_t)+sizeof(str)) );
+		if (cols==NULL) {
+			cols_size = 0;
+			LM_ERR("failed to allocate the needed %d keys/cols\n",nc);
+			goto error;
+		}
+		str_cols = (str*)( cols+nc );
+		/* link db_keys to strs */
+		for ( i=0 ; i<nc ; i++)
+			cols[i] = &str_cols[i];
+
+		cols_size = nc;
+	}
+
+	/* iterate again to fill in the cols */
+	for( col=Jcols->child,i=0 ; col ; col=col->next,i++ ) {
+		cols[i]->s = col->valuestring;
+		cols[i]->len = strlen(col->valuestring);
+	}
+
+	*_c = cols;
+
+	return nc;
+error:
+	*_c = NULL;
+	return -1;
+}
+
+
+static inline int _json_to_filters(cJSON *Jfilter,
+					db_key_t** _k, db_op_t** _o, db_val_t** _v, int only_equal)
+{
+	static db_key_t *keys;
+	static db_op_t  *ops;
+	static db_val_t *vals;
+	static unsigned int keys_size = 0;
+	cJSON *filter, *node;
+	str *str_keys;
+	int nk, i;
+
+	if (Jfilter->type != cJSON_Array) {
+		LM_ERR("bad JSON format, 'filter' must be an array\n");
+		goto error;
+	}
+
+	/* iterate the filters to check and validate */
+	for( filter=Jfilter->child,nk=0 ; filter ; filter=filter->next,nk++ ) {
+		if (filter->type!=cJSON_Object) {
+			LM_ERR("bad JSON format, 'cols' elements must be objects\n");
+			goto error;
+		}
+		if (filter->child->string==NULL) {
+			LM_ERR("invalid filter node %d type %d , without name\n",
+				nk, filter->child->type);
+			goto error;
+		}
+	}
+
+	/* resize the array of cols if we need more */
+	if (nk>keys_size) {
+		/* need a larger set of keys */
+		keys = (db_key_t*)pkg_realloc( keys,
+			nk*(sizeof(db_key_t)+sizeof(str)+sizeof(db_op_t)+sizeof(db_val_t))
+		);
+		if (keys==NULL) {
+			keys_size = 0;
+			LM_ERR("failed to allocate the needed %d keys/cols\n",nk);
+			goto error;
+		}
+		str_keys = (str*)( keys+nk );
+		ops  = (db_op_t*)(str_keys+nk);
+		vals = (db_val_t*)(ops+nk);
+		/* link db_keys to strs */
+		for ( i=0 ; i<nk ; i++)
+			keys[i] = &str_keys[i];
+
+		keys_size = nk;
+	}
+
+	/* iterate again to fill in the cols */
+	for( filter=Jfilter->child,i=0 ; filter ; filter=filter->next,i++ ) {
+		/* name of the key/col */
+		node = filter->child;
+		keys[i]->s = node->string;
+		keys[i]->len = strlen(node->string);
+		/* operator */
+		if (node->type==cJSON_Object) {
+			node = node->child;
+			ops[i] = node->string;
+			if (only_equal && memcmp(ops[i],OP_EQ,sizeof(OP_EQ))) {
+				LM_ERR("only equal allowed between keys and values at "
+					"pos %d\n",i);
+				goto error;
+			}
+		} else {
+			ops[i] = OP_EQ;
+		}
+		/* value */
+		switch (node->type) {
+			case cJSON_NULL:
+				vals[i].type = 0;
+				vals[i].nul = 1;
+				vals[i].free = 0;
+				vals[i].val.bigint_val = 0;
+				break;
+			case cJSON_String:
+				vals[i].type = DB_STRING;
+				vals[i].nul = 0;
+				vals[i].free = 0;
+				vals[i].val.string_val = node->valuestring;
+				break;
+			case cJSON_Number:
+				vals[i].type = DB_INT;
+				vals[i].nul = 0;
+				vals[i].free = 0;
+				vals[i].val.int_val = node->valueint;
+				break;
+			default:
+				LM_ERR("unsupported value node %d\n",node->type);
+				goto error;
+		}
+	}
+
+	*_k = keys;
+	*_o = ops;
+	*_v = vals;
+
+	return nk;
+error:
+	*_k = NULL;
+	*_o = NULL;
+	*_v = NULL;
+	return -1;
+}
+
+static str _query_id = {NULL,0};
+static inline str* _query_id_start( str *table, str *order)
+{
+	if (_query_id.s==NULL) {
+		if ( !query_id_max_len ||
+		(_query_id.s=pkg_malloc(query_id_max_len ))==NULL )
+			return NULL;
+	}
+	_query_id.len = 0;
+
+	memcpy( _query_id.s + _query_id.len, table->s, table->len);
+	_query_id.len += table->len;
+
+	if (order) {
+		*(_query_id.s + _query_id.len++) = '|';
+		memcpy( _query_id.s + _query_id.len, order->s, order->len);
+		_query_id.len += order->len;
+	}
+
+	*(_query_id.s + _query_id.len++) = '^';
+
+	return &_query_id;
+}
+
+static inline str* _query_id_add_cols( db_key_t *_c, int _nc)
+{
+	int i;
+
+	for ( i=0 ; i<_nc ; i++) {
+		if (query_id_max_len-_query_id.len < _c[i]->len+2 /* both |^ */) {
+			_query_id.len = 0; // reset
+			LM_WARN("buffer too short (%d) for building the query ID for "
+				"prepare statement - consider increasing its value "
+				"via 'ps_id_max_buf_len' modparam\n", query_id_max_len);
+			return NULL;
+		}
+		memcpy( _query_id.s + _query_id.len, _c[i]->s, _c[i]->len);
+		_query_id.len += _c[i]->len;
+		*(_query_id.s + _query_id.len++) = '|';
+	}
+	*(_query_id.s + _query_id.len++) = '^';
+
+	return &_query_id;
+}
+
+static inline str* _query_id_add_filter(db_key_t* _k, db_op_t* _o, int _nk)
+{
+	int i,l;
+
+	for ( i=0 ; i<_nk ; i++) {
+		l = strlen( _o[i] );
+		if (query_id_max_len-_query_id.len < _k[i]->len+l+3 /* all %|^ */) {
+			_query_id.len = 0; // reset
+			LM_WARN("buffer too short (%d) for building the query ID for "
+				"prepare statement - consider increasing its value "
+				"via 'ps_id_max_buf_len' modparam\n", query_id_max_len);
+			return NULL;
+		}
+		memcpy( _query_id.s + _query_id.len, _k[i]->s, _k[i]->len);
+		_query_id.len += _k[i]->len;
+		*(_query_id.s + _query_id.len++) = '%';
+
+		memcpy( _query_id.s + _query_id.len, _o[i], l);
+		_query_id.len += l;
+		*(_query_id.s + _query_id.len++) = '|';
+	}
+	*(_query_id.s + _query_id.len++) = '^';
+
+	return &_query_id;
+}
+
+
+
+int sql_api_select(struct db_url *url, struct sip_msg* msg, cJSON *Jcols,
+	str *table, cJSON *Jfilter, str * order, pvname_list_t* dest, int one_row)
+{
+	static map_t ps_map = NULL;
+	db_res_t* db_res = NULL;
+	db_key_t *cols, *keys;
+	db_op_t *ops;
+	db_val_t *vals;
+	int nk, nc;
+	str *id;
+	db_ps_t *my_ps;
+
+	/* convert JSON to COLs */
+	if (Jcols) {
+		nc = _json_to_cols( Jcols, &cols);
+		if (nc<0) {
+			LM_ERR("failed to extract cols from JSON\n");
+			return -1;
+		}
+	} else {
+		cols = NULL;
+		nc = 0;
+	}
+
+	/* convert JSON to keys */
+	if (Jfilter) {
+		nk = _json_to_filters( Jfilter, &keys, &ops, &vals, 0);
+		if (nk<0) {
+			LM_ERR("failed to extract filter from JSON\n");
+			return -1;
+		}
+	} else {
+		keys = NULL;
+		ops = NULL;
+		vals = NULL;
+		nk = 0;
+	}
+
+	/* set table */
+	if (set_table( url, table ,"API select")!=0)
+		return -1;
+
+	if ( !DB_CAPABILITY(url->dbf, DB_CAP_PREPARED_STMT) ||
+	_query_id_start(table,order)==NULL ||
+	(cols && (id=_query_id_add_cols(cols,nc))==NULL) ||
+	(keys && (id=_query_id_add_filter(keys,ops,nk))==NULL) ) {
+		LM_DBG("not using PS\n");
+	} else {
+		LM_DBG("PS id is <%.*s>\n",id->len,id->s);
+		if (ps_map!=NULL || (ps_map=map_create(0))!=NULL) {
+			if ( (my_ps=map_get( ps_map, *id ))!=NULL) {
+				LM_DBG("using PS %p\n",*my_ps);
+				CON_SET_CURR_PS( url->hdl, my_ps);
+			}
+		}
+	}
+
+	/* do the DB query */
+	if ( url->dbf.query( url->hdl, keys, ops, vals, cols, nk, nc,
+	order, &db_res) < 0 ) {
+		const str *t = url->hdl&&url->hdl->table&&url->hdl->table->s
+			? url->hdl->table : 0;
+		LM_ERR("select API query failed: db%d (%.*s)\n",
+		  url->idx, t?t->len:0, t?t->s:"");
+		return -1;
+	}
+
+	if(db_res==NULL || RES_ROW_N(db_res)<=0 || RES_COL_N(db_res)<=0) {
+		LM_DBG("no result after query\n");
+		db_close_query( url, db_res );
+		return 1;
+	}
+
+	if (one_row) {
+		if (db_query_print_one_result(msg, db_res, dest) != 0) {
+			LM_ERR("failed to print ONE result\n");
+			db_close_query( url, db_res );
+			return -1;
+		}
+	} else {
+		if (db_query_print_results(msg, db_res, dest) != 0) {
+			LM_ERR("failed to print results\n");
+			db_close_query( url, db_res );
+			return -1;
+		}
+	}
+
+	db_close_query( url, db_res );
+	return 0;
+}
+
+
+int sql_api_update(struct db_url *url, struct sip_msg* msg, cJSON *Jcols,
+													str *table, cJSON *Jfilter)
+{
+	static map_t ps_map = NULL;
+	db_key_t *ukeys, *keys;
+	db_op_t *uops, *ops;
+	db_val_t *uvals, *vals;
+	int nk, unk;
+	str *id;
+	db_ps_t *my_ps;
+
+	/* convert JSON to COLs */
+	unk = _json_to_filters( Jcols, &ukeys, &uops, &uvals, 1);
+	if (unk<0) {
+		LM_ERR("failed to extract cols from JSON\n");
+		return -1;
+	}
+
+	/* convert JSON to keys */
+	if (Jfilter) {
+		nk = _json_to_filters( Jfilter, &keys, &ops, &vals, 0);
+		if (nk<0) {
+			LM_ERR("failed to extract filter from JSON\n");
+			return -1;
+		}
+	} else {
+		keys = NULL;
+		ops = NULL;
+		vals = NULL;
+		nk = 0;
+	}
+
+	/* set table */
+	if (set_table( url, table ,"API update")!=0)
+		return -1;
+
+	if ( !DB_CAPABILITY(url->dbf, DB_CAP_PREPARED_STMT) ||
+	_query_id_start(table,NULL)==NULL ||
+	(id=_query_id_add_filter(ukeys,uops,unk))==NULL ||
+	(keys && (id=_query_id_add_filter(keys,ops,nk))==NULL) ) {
+		LM_DBG("not using PS\n");
+	} else {
+		LM_DBG("PS id is <%.*s>\n",id->len,id->s);
+		if (ps_map!=NULL || (ps_map=map_create(0))!=NULL) {
+			if ( (my_ps=map_get( ps_map, *id ))!=NULL) {
+				LM_DBG("using PS %p\n",*my_ps);
+				CON_SET_CURR_PS( url->hdl, my_ps);
+			}
+		}
+	}
+
+	/* do the DB query */
+	if (url->dbf.update( url->hdl, keys, ops, vals, ukeys, uvals, nk, unk)<0){
+		const str *t = url->hdl&&url->hdl->table&&url->hdl->table->s
+			? url->hdl->table : 0;
+		LM_ERR("update API query failed: db%d (%.*s)\n",
+		  url->idx, t?t->len:0, t?t->s:"");
+		return -1;
+	}
+
+	return 0;
+}
+
+
+int sql_api_insert(struct db_url *url, struct sip_msg* msg, str *table,
+																cJSON *Jcols)
+{
+	static map_t ps_map = NULL;
+	db_key_t *ukeys;
+	db_op_t *uops;
+	db_val_t *uvals;
+	int unk;
+	str *id;
+	db_ps_t *my_ps;
+
+	/* convert JSON to COLs */
+	unk = _json_to_filters( Jcols, &ukeys, &uops, &uvals, 1);
+	if (unk<0) {
+		LM_ERR("failed to extract cols from JSON\n");
+		return -1;
+	}
+
+	/* set table */
+	if (set_table( url, table ,"API insert")!=0)
+		return -1;
+
+	/* set the PS to be used */
+	if ( !DB_CAPABILITY(url->dbf, DB_CAP_PREPARED_STMT) ||
+	_query_id_start(table,NULL)==NULL ||
+	(id=_query_id_add_filter(ukeys,uops,unk))==NULL ) {
+		LM_DBG("not using PS\n");
+	} else {
+		LM_DBG("PS id is <%.*s>\n",id->len,id->s);
+		if (ps_map!=NULL || (ps_map=map_create(0))!=NULL) {
+			if ( (my_ps=map_get( ps_map, *id ))!=NULL) {
+				LM_DBG("using PS %p\n",*my_ps);
+				CON_SET_CURR_PS( url->hdl, my_ps);
+			}
+		}
+	}
+
+	/* do the DB query */
+	if (url->dbf.insert( url->hdl, ukeys, uvals, unk)<0){
+		const str *t = url->hdl&&url->hdl->table&&url->hdl->table->s
+			? url->hdl->table : 0;
+		LM_ERR("update API query failed: db%d (%.*s)\n",
+		  url->idx, t?t->len:0, t?t->s:"");
+		return -1;
+	}
+
+	return 0;
+}
+
+
+int sql_api_delete(struct db_url *url, struct sip_msg* msg,
+													str *table, cJSON *Jfilter)
+{
+	static map_t ps_map = NULL;
+	db_key_t *keys;
+	db_op_t *ops;
+	db_val_t *vals;
+	int nk;
+	str *id;
+	db_ps_t *my_ps;
+
+	/* convert JSON to keys */
+	if (Jfilter) {
+		nk = _json_to_filters( Jfilter, &keys, &ops, &vals, 0);
+		if (nk<0) {
+			LM_ERR("failed to extract filter from JSON\n");
+			return -1;
+		}
+	} else {
+		keys = NULL;
+		ops = NULL;
+		vals = NULL;
+		nk = 0;
+	}
+
+	/* set table */
+	if (set_table( url, table ,"API delete")!=0)
+		return -1;
+
+	/* set the PS to be used */
+	if ( !DB_CAPABILITY(url->dbf, DB_CAP_PREPARED_STMT) ||
+	_query_id_start(table,NULL)==NULL ||
+	(keys && (id=_query_id_add_filter(keys,ops,nk))==NULL) ) {
+		LM_DBG("not using PS\n");
+	} else {
+		LM_DBG("PS id is <%.*s>\n",id->len,id->s);
+		if (ps_map!=NULL || (ps_map=map_create(0))!=NULL) {
+			if ( (my_ps=map_get( ps_map, *id ))!=NULL) {
+				LM_DBG("using PS %p\n",*my_ps);
+				CON_SET_CURR_PS( url->hdl, my_ps);
+			}
+		}
+	}
+
+	/* do the DB query */
+	if (url->dbf.delete( url->hdl, keys, ops, vals, nk)<0){
+		const str *t = url->hdl&&url->hdl->table&&url->hdl->table->s
+			? url->hdl->table : 0;
+		LM_ERR("update API query failed: db%d (%.*s)\n",
+		  url->idx, t?t->len:0, t?t->s:"");
+		return -1;
+	}
+
+	return 0;
+}
+
+
+int sql_api_replace(struct db_url *url, struct sip_msg* msg, str *table,
+																cJSON *Jcols)
+{
+	static map_t ps_map = NULL;
+	db_key_t *ukeys;
+	db_op_t *uops;
+	db_val_t *uvals;
+	int unk;
+	str *id;
+	db_ps_t *my_ps;
+
+	/* convert JSON to COLs */
+	unk = _json_to_filters( Jcols, &ukeys, &uops, &uvals, 1);
+	if (unk<0) {
+		LM_ERR("failed to extract cols from JSON\n");
+		return -1;
+	}
+
+	/* set table */
+	if (set_table( url, table ,"API replace")!=0)
+		return -1;
+
+	/* set the PS to be used */
+	if ( !DB_CAPABILITY(url->dbf, DB_CAP_PREPARED_STMT) ||
+	_query_id_start(table,NULL)==NULL ||
+	(id=_query_id_add_filter(ukeys,uops,unk))==NULL ) {
+		LM_DBG("not using PS\n");
+	} else {
+		LM_DBG("PS id is <%.*s>\n",id->len,id->s);
+		if (ps_map!=NULL || (ps_map=map_create(0))!=NULL) {
+			if ( (my_ps=map_get( ps_map, *id ))!=NULL) {
+				LM_DBG("using PS %p\n",*my_ps);
+				CON_SET_CURR_PS( url->hdl, my_ps);
+			}
+		}
+	}
+
+	/* do the DB query */
+	if (url->dbf.replace( url->hdl, ukeys, uvals, unk)<0){
+		const str *t = url->hdl&&url->hdl->table&&url->hdl->table->s
+			? url->hdl->table : 0;
+		LM_ERR("update API query failed: db%d (%.*s)\n",
+		  url->idx, t?t->len:0, t?t->s:"");
+		return -1;
+	}
+
 	return 0;
 }
 
