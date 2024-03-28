@@ -841,7 +841,7 @@ int lb_route(struct sip_msg *req, int group, struct lb_res_str_list *rl,
 					if( res_cur[k] == dst->rmap[l].resource ) {
 						dst->rmap[l].sessions_since_last_heartbeat++;
 
-						LM_DBG("Incrementing sess since last HB for winning destination %d <%.*s> (sessions_since_last_heartbeat=%d)\n",
+						LM_DBG("incrementing sess since last HB for winning destination %d <%.*s> (sessions_since_last_heartbeat=%d)\n",
 							dst->id, dst->uri.len, dst->uri.s, dst->rmap[l].sessions_since_last_heartbeat );
 
 						break; // exit the loop
