@@ -817,7 +817,10 @@ static void lb_update_max_loads(unsigned int ticks, void *param)
 				dst->rmap[ri].max_sessions = dst->fs_sock->stats.max_sess;
 				dst->rmap[ri].current_sessions = dst->fs_sock->stats.sess;
 				dst->rmap[ri].cpu_idle = dst->fs_sock->stats.id_cpu / (float)100;
-				/* reset sessions since last heartbeat counter */
+				/*
+				 * reset sessions since last heartbeat counter
+				 * todo ideally this happens when the heartbeat arrives, this fires according to fetch_freeswitch_stats timer
+                 */
 				dst->rmap[ri].sessions_since_last_heartbeat = 0;
 
 				if (psz < dst->fs_sock->stats.max_sess) {
