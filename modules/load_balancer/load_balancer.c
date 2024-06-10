@@ -572,7 +572,7 @@ static int w_lb_start(struct sip_msg *req, int *grp_no,
 						return -5;
 					}
 					flags |= LB_FLAGS_PERCENT_WITH_CPU;
-					LM_DBG("using integrated estimation (percentage of max sessions with CPU factor estimation) \n");
+					LM_DBG("using integrated estimation (percentage of max sessions used, tracing real time allocations) \n");
 					break;
 				case 'n':
 					flags |= LB_FLAGS_NEGATIVE;
