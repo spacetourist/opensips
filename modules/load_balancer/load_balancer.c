@@ -62,6 +62,8 @@ str lb_probe_from = str_init("sip:prober@localhost");
 static int* probing_reply_codes = NULL;
 static int probing_codes_no = 0;
 
+int use_cpu_factor;
+
 int fetch_freeswitch_stats;
 int initial_fs_load = 1000;
 
@@ -173,6 +175,7 @@ static const param_export_t mod_params[]={
 	{ "cluster_id",            INT_PARAM, &lb_cluster_id            },
 	{ "cluster_sharing_tag",   STR_PARAM, &lb_cluster_shtag         },
 	{ "fetch_freeswitch_stats",  INT_PARAM, &fetch_freeswitch_stats },
+	{ "use_cpu_factor",          INT_PARAM, &use_cpu_factor         },
 	{ "initial_freeswitch_load", INT_PARAM, &initial_fs_load        },
 	{ 0,0,0 }
 };
@@ -299,7 +302,7 @@ static void lb_inherit_state(struct lb_data *old_data,struct lb_data *new_data)
 			strncasecmp(new_dst->uri.s, old_dst->uri.s, old_dst->uri.len)==0) {
 				LM_DBG("DST %d/<%.*s> found in old set, copying state\n",
 					new_dst->group, new_dst->uri.len,new_dst->uri.s);
-				/* first reset the existing flags (only the flags related 
+				/* first reset the existing flags (only the flags related
 				 * to state!!!) */
 				new_dst->flags &=
 					~(LB_DST_STAT_DSBL_FLAG|LB_DST_STAT_NOEN_FLAG);
@@ -557,19 +560,19 @@ static int w_lb_start(struct sip_msg *req, int *grp_no,
 			switch( *f ) {
 				case 'r':
 					if( flags & LB_FLAGS_PERCENT_WITH_CPU ) {
-						LM_ERR("flags c & r are mutually exclusive (r)\n");
+						LM_ERR("flags i & r are mutually exclusive (r)\n");
 						return -5;
 					}
 					flags |= LB_FLAGS_RELATIVE;
 					LM_DBG("using relative versus absolute estimation\n");
 					break;
-				case 'c':
+				case 'i':
 					if( flags & LB_FLAGS_RELATIVE ) {
-						LM_ERR("flags c & r are mutually exclusive (c)\n");
+						LM_ERR("flags i & r are mutually exclusive (i)\n");
 						return -5;
 					}
 					flags |= LB_FLAGS_PERCENT_WITH_CPU;
-					LM_DBG("using percentage of max sessions with CPU factor estimation \n");
+					LM_DBG("using integrated estimation (percentage of max sessions used, tracing real time allocations) \n");
 					break;
 				case 'n':
 					flags |= LB_FLAGS_NEGATIVE;
