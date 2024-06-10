@@ -27,7 +27,6 @@ Load Balancer Module
               1.5.10. initial_freeswitch_load (integer)
               1.5.11. cluster_id (integer)
               1.5.12. cluster_sharing_tag (string)
-              1.5.13. use_cpu_factor (integer)
 
         1.6. Exported Functions
 
@@ -398,20 +397,6 @@ modparam("load_balancer", "cluster_id", 9)
 modparam("load_balancer", "cluster_sharing_tag", "vip")
 ...
 
-1.5.13. use_cpu_factor (integer)
-
-   This is only relevant for "integrated estimation" mode.
-
-   If enabled, the CPU factor collected in the most recent heartbeat
-   will be used to reduce the capacity of each FreeSWITCH instance.
-
-   When disabled, no CPU factor will be applied in the calculation.
-
-   Default value is “empty (disabled)”.
-...
-modparam("load_balancer", "use_cpu_factor", 1)
-...
-
 1.6. Exported Functions
 
 1.6.1.  lb_start(grp,resources[,flags],[attrs])
@@ -442,15 +427,6 @@ modparam("load_balancer", "use_cpu_factor", 1)
             Absolute value is assumed - the effective available
             load ( maximum_load - current_load) is used in
             computing the load of each pear/resource.
-          + i - Integrated estimation - requires fetch_freeswitch_stats.
-            Capture the heartbeat data into local memory and use this
-            data to compute the target at runtime. Each time a call is
-            allocated the counter is immediately increased until it is
-            overwritten by the next heartbeat. This is well suited to
-            high performance systems where many calls may arrive within
-            the heartbeat period (which should be set to 1s when used
-            with this algorithm).
-            Calc: ((current_sessions+sessions_since_last_heartbeat)/max_sessions)*cpu_idle
           + s - Pick a random destination if multiple destinations
             with the same load are found, instead of always
             picking first matched destination. This could help to
