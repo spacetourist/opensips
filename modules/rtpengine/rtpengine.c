@@ -81,6 +81,7 @@
 #include "../rtp_relay/rtp_relay.h"
 #include "rtpengine.h"
 #include "rtpengine_funcs.h"
+#include "rtpengine_hash.h"
 #include "bencode.h"
 
 #if !defined(AF_LOCAL)
@@ -98,6 +99,7 @@
 
 #define MI_SHOW_RTP_ENGINES			"rtpengine_show"
 #define MI_RELOAD_RTP_ENGINES		"rtpengine_reload"
+#define MI_DUMP_HASHTABLE    		"rtpengine_dump"
 
 #define MI_RTP_ENGINE_NOT_FOUND		"RTP engine not found"
 #define MI_RTP_ENGINE_NOT_FOUND_LEN	(sizeof(MI_RTP_ENGINE_NOT_FOUND)-1)
@@ -141,27 +143,6 @@
 			(_fd) = -1; \
 		} \
 	} while (0)
-
-enum rtpe_operation {
-	OP_OFFER = 1,
-	OP_ANSWER,
-	OP_DELETE,
-	OP_START_RECORDING,
-	OP_STOP_RECORDING,
-	OP_QUERY,
-	OP_START_MEDIA,
-	OP_STOP_MEDIA,
-	OP_BLOCK_MEDIA,
-	OP_UNBLOCK_MEDIA,
-	OP_BLOCK_DTMF,
-	OP_UNBLOCK_DTMF,
-	OP_START_FORWARD,
-	OP_STOP_FORWARD,
-	OP_PLAY_DTMF,
-	OP_SUBSCRIBE_REQUEST,
-	OP_SUBSCRIBE_ANSWER,
-	OP_UNSUBSCRIBE,
-};
 
 enum rtpe_stat {
 	STAT_MOS_AVERAGE,	STAT_JITTER_AVERAGE,	STAT_ROUNDTRIP_AVERAGE,		STAT_PACKETLOSS_AVERAGE,
@@ -317,7 +298,8 @@ static int fixup_set_id(void ** param);
 static int fixup_free_set_id(void ** param);
 static int set_rtpengine_set_f(struct sip_msg * msg, rtpe_set_link_t *set_param);
 static struct rtpe_set * select_rtpe_set(int id_set);
-static struct rtpe_node *select_rtpe_node(str, struct rtpe_set *);
+static struct rtpe_node *select_rtpe_node(str, str, enum rtpe_operation, struct rtpe_set *);
+static struct rtpe_node *select_rtpe_node_assignment(str, str, enum rtpe_operation);
 static struct rtpe_node *lookup_rtpe_node(struct rtpe_set * rtpe_list, str *rtpe_url);
 static void free_rtpe_set(int);
 static void free_rtpe_node(struct rtpe_set *, str *);
@@ -351,6 +333,8 @@ static mi_response_t *mi_teardown_call(const mi_params_t *params,
 								struct mi_handler *async_hdl);
 static mi_response_t *mi_reload_rtpengines(const mi_params_t *params,
 								struct mi_handler *async_hdl);
+static mi_response_t *mi_hashtable_dump(const mi_params_t *params,
+								struct mi_handler *async_hdl);
 
 
 static int rtpengine_stats_used = 0;
@@ -372,6 +356,10 @@ static int rtpe_sets=0; /*used in rtpengine_set_store()*/
 static int rtpe_ctx_idx = -1;
 struct rtpe_set_head **rtpe_set_list =0;
 struct rtpe_set **default_rtpe_set=0;
+
+static int use_hash_table = 1; // default on
+static int hash_table_tout = 3600;
+static int hash_table_size = 256;
 
 static str rtpengine_notify_sock;
 static str rtpengine_notify_event_name = str_init("E_RTPENGINE_NOTIFICATION");
@@ -692,8 +680,10 @@ static const param_export_t params[] = {
 	{"db_table",               STR_PARAM, &db_table.s             },
 	{"socket_column",          STR_PARAM, &db_rtpe_sock_col.s        },
 	{"set_column",             STR_PARAM, &db_rtpe_set_col.s         },
-	{"notification_sock",      STR_PARAM|USE_FUNC_PARAM,
-									(void *)rtpengine_set_notify},
+	{"notification_sock",      STR_PARAM|USE_FUNC_PARAM, (void *)rtpengine_set_notify},
+	{ "use_hash_table",        INT_PARAM, &use_hash_table         },
+	{"hash_table_tout",        INT_PARAM, &hash_table_tout        },
+	{"hash_table_size",        INT_PARAM, &hash_table_size        },
 	{0, 0, 0}
 };
 
@@ -714,6 +704,10 @@ static const mi_export_t mi_cmds[] = {
 	},
 	{ "teardown", 0, 0, 0, {
 		{mi_teardown_call, {"callid", 0}},
+		{EMPTY_MI_RECIPE}}
+	},
+	{ MI_DUMP_HASHTABLE, 0, 0, 0, {
+		{mi_hashtable_dump, {0}},
 		{EMPTY_MI_RECIPE}}
 	},
 	{EMPTY_MI_EXPORT}
@@ -1441,6 +1435,25 @@ static mi_response_t *mi_teardown_call(const mi_params_t *params,
 	return init_mi_result_ok();
 }
 
+static mi_response_t *mi_hashtable_dump(const mi_params_t *params,
+								struct mi_handler *async_hdl)
+{
+	if (!use_hash_table) {
+		return init_mi_error(500, MI_SSTR("Hash table not enabled"));
+	}
+
+	unsigned int total = 0;
+
+	// Dump memory stats into the log
+	rtpengine_hash_table_print();
+
+	// Dump the hash table size into the log
+	total = rtpengine_hash_table_total();
+	LM_DBG("hash_table_total=%d\n", total);
+
+	return init_mi_result_ok();
+}
+
 /*
  * Timer housekeeping, invoked each timer interval to check for proxy re-enablement
  */
@@ -1555,6 +1568,16 @@ mod_init(void)
 				&rtpengine_status_event_status_s)) == NULL) {
 		LM_ERR("could not create RTPEngine Status status param\n");
 		return -1;
+	}
+
+	if (use_hash_table) {
+		/* init the hash table which keeps the call-id <-> selected_node relation */
+		if (!rtpengine_hash_table_init(hash_table_size)) {
+			LM_ERR("rtpengine_hash_table_init(%d) failed!\n", hash_table_size);
+			return -1;
+		} else {
+			LM_DBG("rtpengine_hash_table_init(%d) success!\n", hash_table_size);
+		}
 	}
 
 	if(db_url.s == NULL) {
@@ -1683,7 +1706,7 @@ mod_init(void)
 		memset(&dlgb, 0, sizeof(struct dlg_binds));
 	}
 
-  if (register_timer("rtpengine-timer", rtpengine_timer, NULL, rtpengine_timer_interval, TIMER_FLAG_DELAY_ON_DELAY) <0 ) {
+	if (register_timer("rtpengine-timer", rtpengine_timer, NULL, rtpengine_timer_interval, TIMER_FLAG_DELAY_ON_DELAY) <0 ) {
     LM_ERR("could not register timer function\n");
     return -1;
   }
@@ -2039,6 +2062,15 @@ static void mod_destroy(void)
 	free_rtpe_sets();
 	shm_free(*rtpe_set_list);
 	shm_free(rtpe_set_list);
+
+	/* destroy the hashtable which keeps the call-id <-> selected_node relation */
+	if (use_hash_table) {
+		if(!rtpengine_hash_table_destroy()) {
+			LM_ERR("rtpengine_hash_table_destroy() failed!\n");
+		} else {
+			LM_DBG("rtpengine_hash_table_destroy() success!\n");
+		}
+	}
 
 	if (rtpe_lock) {
 		lock_destroy_rw(rtpe_lock);
@@ -2444,6 +2476,76 @@ static struct rtpe_node *get_rtpe_node(str *node, struct rtpe_set *set)
 	return NULL;
 }
 
+// store allocated node into hash table - in the event that this data is lost we will be back to
+// the basic node selection algorithm which will be consistent presuming no nodes have changed
+// state since the original allocation.
+static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rtpe_node *node, str viabranch, enum rtpe_operation op) {
+	// Check if we have an existing entry, if so no need to insert the entry into the hash table
+	if(!select_rtpe_node_assignment(ng_flags.call_id, viabranch, op)) {
+		goto skip_hash_table_insert;
+	}
+
+	// The entry is not included in the hash table, build the entry..
+	struct rtpengine_hash_entry *entry = shm_malloc(sizeof(struct rtpengine_hash_entry));
+	if(!entry) {
+		LM_ERR("rtpengine hash table fail to create entry for callid=%.*s viabranch=%.*s\n",
+			   ng_flags.call_id.len,
+			   ng_flags.call_id.s, viabranch.len, viabranch.s);
+		goto skip_hash_table_insert;
+	}
+	memset(entry, 0, sizeof(struct rtpengine_hash_entry));
+
+	// ...fill the entry...
+	if(ng_flags.call_id.s && ng_flags.call_id.len > 0) {
+		if(shm_str_dup(&entry->callid, &ng_flags.call_id) < 0) {
+			LM_ERR("rtpengine hash table fail to duplicate callid=%.*s\n",
+				   ng_flags.call_id.len,
+				   ng_flags.call_id.s);
+			rtpengine_hash_table_free_entry(entry);
+			goto skip_hash_table_insert;
+		}
+	}
+	if(viabranch.s && viabranch.len > 0) {
+		if(shm_str_dup(&entry->viabranch, &viabranch) < 0) {
+			LM_ERR("rtpengine hash table fail to duplicate viabranch=%.*s\n",
+				   viabranch.len, viabranch.s);
+			rtpengine_hash_table_free_entry(entry);
+			goto skip_hash_table_insert;
+		}
+	}
+	entry->node = node;
+	entry->next = NULL;
+	entry->tout = get_ticks() + hash_table_tout;
+
+	// ...insert the entry into the hashtable
+	if(!rtpengine_hash_table_insert(ng_flags.call_id, viabranch, entry)) {
+		LM_ERR("rtpengine hash table fail to insert node=%.*s for calllen=%d callid=%.*s viabranch=%.*s\n",
+			   node->rn_url.len, node->rn_url.s, ng_flags.call_id.len,
+			   ng_flags.call_id.len, ng_flags.call_id.s, viabranch.len,
+			   viabranch.s);
+		rtpengine_hash_table_free_entry(entry);
+		goto skip_hash_table_insert;
+	} else {
+		LM_DBG("rtpengine hash table insert node=%.*s for callid=%.*s viabranch=%.*s\n",
+			   node->rn_url.len, node->rn_url.s,
+			   ng_flags.call_id.len, ng_flags.call_id.s, viabranch.len,
+			   viabranch.s);
+	}
+
+skip_hash_table_insert:
+	if(op == OP_DELETE) {
+		/* Delete the key<->value from the hashtable */
+		if(!rtpengine_hash_table_remove(ng_flags.call_id, viabranch, op)) {
+			LM_ERR("rtpengine hash table failed to remove entry for callid=%.*s viabranch=%.*s\n",
+				   ng_flags.call_id.len,
+				   ng_flags.call_id.s, viabranch.len, viabranch.s);
+		} else {
+			LM_DBG("rtpengine hash table remove entry for callid=%.*s viabranch=%.*s\n",
+				   ng_flags.call_id.len,
+				   ng_flags.call_id.s, viabranch.len, viabranch.s);
+		}
+	}
+}
 
 static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_msg *msg,
 	enum rtpe_operation op, str *flags_str, str *body_in, pv_spec_t *spvar,
@@ -2635,12 +2737,14 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 
 	RTPE_START_READ();
 	do {
+		// if this action is being taken against a specific requested node (snode) then get it,
+		// otherwise seek one for all new offers
 		if (snode && snode->s) {
 			if ((node = get_rtpe_node(snode, set)) == NULL && op == OP_OFFER)
-				node = select_rtpe_node(ng_flags.call_id, set);
+				node = select_rtpe_node(ng_flags.call_id, ng_flags.viabranch, op, set);
 			snode = NULL;
 		} else {
-			node = select_rtpe_node(ng_flags.call_id, set);
+			node = select_rtpe_node(ng_flags.call_id, ng_flags.viabranch, op, set);
 		}
 		if (!node) {
 			err = "no available proxies";
@@ -2680,6 +2784,79 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 
 	if (flags_nt.s)
 		pkg_free(flags_nt.s);
+
+	if (use_hash_table) {
+		rtpengine_store_hash_entry(ng_flags, node, viabranch, op);
+	}
+//	if (use_hash_table) {
+//		// Check if we have an existing entry, if so no need to insert the entry into the hash table
+//		if(!select_rtpe_node_assignment(ng_flags.call_id, viabranch, op)) {
+//			goto skip_hash_table_insert;
+//		}
+//
+//		// The entry is not included in the hash table, build the entry..
+//		struct rtpengine_hash_entry *entry = shm_malloc(sizeof(struct rtpengine_hash_entry));
+//		if(!entry) {
+//			LM_ERR("rtpengine hash table fail to create entry for callid=%.*s viabranch=%.*s\n",
+//				   ng_flags.call_id.len,
+//				   ng_flags.call_id.s, viabranch.len, viabranch.s);
+//			goto skip_hash_table_insert;
+//		}
+//		memset(entry, 0, sizeof(struct rtpengine_hash_entry));
+//
+//		// ...fill the entry...
+//		if(ng_flags.call_id.s && ng_flags.call_id.len > 0) {
+//			if(shm_str_dup(&entry->callid, &ng_flags.call_id) < 0) {
+//				LM_ERR("rtpengine hash table fail to duplicate callid=%.*s\n",
+//					   ng_flags.call_id.len,
+//					   ng_flags.call_id.s);
+//				rtpengine_hash_table_free_entry(entry);
+//				goto skip_hash_table_insert;
+//			}
+//		}
+//		if(viabranch.s && viabranch.len > 0) {
+//			if(shm_str_dup(&entry->viabranch, &viabranch) < 0) {
+//				LM_ERR("rtpengine hash table fail to duplicate viabranch=%.*s\n",
+//					   viabranch.len, viabranch.s);
+//				rtpengine_hash_table_free_entry(entry);
+//				goto skip_hash_table_insert;
+//			}
+//		}
+//		entry->node = node;
+//		entry->next = NULL;
+//		entry->tout = get_ticks() + hash_table_tout;
+//
+//		// ...insert the entry into the hashtable
+//		if(!rtpengine_hash_table_insert(ng_flags.call_id, viabranch, entry)) {
+//			LM_ERR("rtpengine hash table fail to insert node=%.*s for calllen=%d callid=%.*s viabranch=%.*s\n",
+//				   node->rn_url.len, node->rn_url.s, ng_flags.call_id.len,
+//				   ng_flags.call_id.len, ng_flags.call_id.s, viabranch.len,
+//				   viabranch.s);
+//			rtpengine_hash_table_free_entry(entry);
+//			goto skip_hash_table_insert;
+//		} else {
+//			LM_DBG("rtpengine hash table insert node=%.*s for callid=%.*s viabranch=%.*s\n",
+//				   node->rn_url.len, node->rn_url.s,
+//				   ng_flags.call_id.len, ng_flags.call_id.s, viabranch.len,
+//				   viabranch.s);
+//		}
+//	}
+//
+//skip_hash_table_insert:
+//	if(op == OP_DELETE) {
+//		if (use_hash_table) {
+//			/* Delete the key<->value from the hashtable */
+//			if(!rtpengine_hash_table_remove(ng_flags.call_id, viabranch, op)) {
+//				LM_ERR("rtpengine hash table failed to remove entry for callid=%.*s viabranch=%.*s\n",
+//					   ng_flags.call_id.len,
+//					   ng_flags.call_id.s, viabranch.len, viabranch.s);
+//			} else {
+//				LM_DBG("rtpengine hash table remove entry for callid=%.*s viabranch=%.*s\n",
+//					   ng_flags.call_id.len,
+//					   ng_flags.call_id.s, viabranch.len, viabranch.s);
+//			}
+//		}
+//	}
 
 	return resp;
 
@@ -2729,7 +2906,6 @@ set_rtpengine_set_from_avp(struct sip_msg *msg)
 
 	return 1;
 }
-
 
 static int rtpe_function_call_simple(struct sip_msg *msg, enum rtpe_operation op,
 		str *flags_str, struct rtpe_set *set, str *node, pv_spec_t *spvar)
@@ -3029,13 +3205,10 @@ static struct rtpe_set * select_rtpe_set(int id_set )
 	return rtpe_list;
 }
 /*
- * Main balancing routine. This does not try to keep the same proxy for
- * the call if some proxies were disabled or enabled; proxy death considered
- * too rare. Otherwise we should implement "mature" HA clustering, which is
- * too expensive here.
+ * Main balancing routine. This tries to keep the same proxy for
+ * the call if some proxies were disabled or enabled.
  */
-static struct rtpe_node *
-select_rtpe_node(str callid, struct rtpe_set *set)
+static struct rtpe_node *select_rtpe_node(str callid, str viabranch, enum rtpe_operation op, struct rtpe_set *set)
 {
 	unsigned sum, weight_sum;
 	struct rtpe_node* node;
@@ -3050,6 +3223,20 @@ select_rtpe_node(str callid, struct rtpe_set *set)
 	if(!set){
 		LM_ERR("script error -no valid set selected\n");
 		return NULL;
+	}
+
+	// Check for existing node allocation in hash table
+	// note: we are not checking for disabled nodes, we wish to maintain the list for the whole call,
+	// proxy death is rare so operationally we are disabling for maintenance once sessions end gracefully
+	//
+	// a future release could make optional behaviour param - i.e. continue_on_disabled_nodes
+	// (ideally we'd have multiple states such as drain/broken)
+	if (use_hash_table) {
+		node = select_rtpe_node_assignment(callid, viabranch, op);
+		if (node) {
+			LM_DBG("previous rtpengine node <%s> will continue to be used\n", node->rn_url.s);
+			return node;
+		}
 	}
 
 	/* Most popular case: 1 proxy, nothing to calculate */
@@ -3079,6 +3266,10 @@ select_rtpe_node(str callid, struct rtpe_set *set)
 	if (found == 0) {
 			return NULL;
 	}
+
+	// every RTP instance has a weight of 1
+	//  when all proxies are up: 6 % 6 = 0
+	//  when some proxies down : 4 % 6 = 2
 	sumcut = weight_sum ? sum % constant_weight_sum : -1;
 	/*
 	 * sumcut here lays from 0 to constant_weight_sum-1.
@@ -3103,6 +3294,31 @@ select_rtpe_node(str callid, struct rtpe_set *set)
 	}
 	/* No node list */
 	return NULL;
+}
+
+/*
+ * lookup the hashtable (key=callid value=node) and get the old node (e.g. for answer/delete)
+ */
+static struct rtpe_node *select_rtpe_node_assignment(
+		str callid, str viabranch, enum rtpe_operation op)
+{
+	struct rtpe_node *node = NULL;
+
+	node = rtpengine_hash_table_lookup(callid, viabranch, op);
+
+	if(!node) {
+		LM_DBG("rtpengine hash table lookup failed to find node for "
+			   "callid=%.*s viabranch=%.*s\n",
+			   callid.len, callid.s, viabranch.len, viabranch.s);
+		return NULL;
+	} else {
+		LM_DBG("rtpengine hash table lookup found node=%.*s for "
+			   "callid=%.*s viabranch=%.*s\n",
+			   node->rn_url.len, node->rn_url.s, callid.len,
+			   callid.s, viabranch.len, viabranch.s);
+	}
+
+	return node;
 }
 
 static int
