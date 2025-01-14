@@ -11,6 +11,7 @@ static void rtpengine_hash_table_free_row_lock(gen_lock_t *row_lock);
 static struct rtpengine_hash_table *rtpengine_hash_table;
 
 /* from sipwise rtpengine */
+// todo kamailio allows sha1 https://www.kamailio.org/docs/modules/5.4.x/modules/rtpengine.html#rtpengine.p.hash_algo
 static unsigned int str_hash(str s)
 {
 	unsigned int hash = 5381;
@@ -102,6 +103,7 @@ int rtpengine_hash_table_init(int size)
 		}
 		memset(rtpengine_hash_table->row_entry_list[i], 0, sizeof(struct rtpengine_hash_entry));
 
+		// todo what is a -1 timeout?
 		rtpengine_hash_table->row_entry_list[i]->tout = -1;
 		rtpengine_hash_table->row_entry_list[i]->next = NULL;
 
@@ -223,7 +225,7 @@ int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash
 
 	while(entry) {
 		// if found, don't add new entry
-		if(str_strcmp(entry->callid, new_entry->callid) && str_strcmp(entry->viabranch, new_entry->viabranch)) {
+		if(str_strcmp(&entry->callid, &new_entry->callid) && str_strcmp(&entry->viabranch, &new_entry->viabranch)) {
 			lock_release(rtpengine_hash_table->row_locks[hash_index]);
 			LM_NOTICE("callid=%.*s, viabranch=%.*s already in hashtable, ignore new value\n",
 					  entry->callid.len, entry->callid.s, entry->viabranch.len,
@@ -289,8 +291,8 @@ int rtpengine_hash_table_remove(str callid, str viabranch, enum rtpe_operation o
 
 	while(entry) {
 		// if callid found, delete entry
-		if((str_strcmp(entry->callid, callid) && str_strcmp(entry->viabranch, viabranch))
-		   || (str_strcmp(entry->callid, callid) && viabranch.len == 0 && op == OP_DELETE)) {
+		if((str_strcmp(&entry->callid, &callid) && str_strcmp(&entry->viabranch, &viabranch))
+		   || (str_strcmp(&entry->callid, &callid) && viabranch.len == 0 && op == OP_DELETE)) {
 			// set pointers; exclude entry
 			last_entry->next = entry->next;
 
@@ -366,8 +368,8 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 
 	while(entry) {
 		// if callid found, return entry
-		if((str_strcmp(entry->callid, callid) && str_strcmp(entry->viabranch, viabranch))
-		   || (str_strcmp(entry->callid, callid) && viabranch.len == 0 && op == OP_DELETE)) {
+		if((str_strcmp(&entry->callid, &callid) && str_strcmp(&entry->viabranch, &viabranch))
+		   || (str_strcmp(&entry->callid, &callid) && viabranch.len == 0 && op == OP_DELETE)) {
 			node = entry->node;
 
 			lock_release(rtpengine_hash_table->row_locks[hash_index]);
