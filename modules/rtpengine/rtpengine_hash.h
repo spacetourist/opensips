@@ -41,7 +41,7 @@ struct rtpengine_hash_table
 };
 
 int rtpengine_hash_table_init(int size);
-int rtpengine_hash_table_destroy();
+int rtpengine_hash_table_destroy(void);
 int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash_entry *value);
 int rtpengine_hash_table_remove(str callid, str viabranch, enum rtpe_operation);
 struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rtpe_operation);

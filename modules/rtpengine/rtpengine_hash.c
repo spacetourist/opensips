@@ -115,7 +115,7 @@ int rtpengine_hash_table_init(int size)
 	return 1;
 }
 
-int rtpengine_hash_table_destroy()
+int rtpengine_hash_table_destroy(void)
 {
 	int i;
 
