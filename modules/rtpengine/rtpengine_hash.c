@@ -2,6 +2,7 @@
 #include "rtpengine_hash.h"
 
 #include "../../str.h"
+#include "../../ut.h"
 #include "../../dprint.h"
 #include "../../mem/shm_mem.h"
 #include "../../timer.h"
