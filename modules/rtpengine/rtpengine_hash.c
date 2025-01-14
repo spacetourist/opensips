@@ -10,11 +10,57 @@
 static void rtpengine_hash_table_free_row_lock(gen_lock_t *row_lock);
 
 static struct rtpengine_hash_table *rtpengine_hash_table;
-static void rtpengine_hash_table_free_row_entry_list(struct rtpengine_hash_entry *row_entry_list);
-static int rtpengine_hash_table_sanity_checks(void);
+
+static int rtpengine_hash_table_sanity_checks(void)
+{
+	// check rtpengine hashtable
+	if(!rtpengine_hash_table) {
+		LM_ERR("NULL rtpengine_hash_table\n");
+		return 0;
+	}
+
+	// check rtpengine hashtable->row_locks
+	if(!rtpengine_hash_table->row_locks) {
+		LM_ERR("NULL rtpengine_hash_table->row_locks\n");
+		return 0;
+	}
+
+	// check rtpengine hashtable->row_entry_list
+	if(!rtpengine_hash_table->row_entry_list) {
+		LM_ERR("NULL rtpengine_hash_table->row_entry_list\n");
+		return 0;
+	}
+
+	// check rtpengine hashtable->row_totals
+	if(!rtpengine_hash_table->row_totals) {
+		LM_ERR("NULL rtpengine_hash_table->row_totals\n");
+		return 0;
+	}
+
+	return 1;
+}
+
+static void rtpengine_hash_table_free_row_entry_list(struct rtpengine_hash_entry *row_entry_list)
+{
+	struct rtpengine_hash_entry *entry, *last_entry;
+
+	if(!row_entry_list) {
+		LM_ERR("try to free a NULL row_entry_list\n");
+		return;
+	}
+
+	entry = row_entry_list;
+	while(entry) {
+		last_entry = entry;
+		entry = entry->next;
+		rtpengine_hash_table_free_entry(last_entry);
+		last_entry = NULL;
+	}
+
+	return;
+}
 
 /* from sipwise rtpengine */
-// todo kamailio allows sha1 https://www.kamailio.org/docs/modules/5.4.x/modules/rtpengine.html#rtpengine.p.hash_algo
 static unsigned int str_hash(str s)
 {
 	unsigned int hash = 5381;
@@ -106,7 +152,6 @@ int rtpengine_hash_table_init(int size)
 		}
 		memset(rtpengine_hash_table->row_entry_list[i], 0, sizeof(struct rtpengine_hash_entry));
 
-		// todo what is a -1 timeout?
 		rtpengine_hash_table->row_entry_list[i]->tout = -1;
 		rtpengine_hash_table->row_entry_list[i]->next = NULL;
 
@@ -495,26 +540,6 @@ void rtpengine_hash_table_free_entry(struct rtpengine_hash_entry *entry)
 	return;
 }
 
-static void rtpengine_hash_table_free_row_entry_list(struct rtpengine_hash_entry *row_entry_list)
-{
-	struct rtpengine_hash_entry *entry, *last_entry;
-
-	if(!row_entry_list) {
-		LM_ERR("try to free a NULL row_entry_list\n");
-		return;
-	}
-
-	entry = row_entry_list;
-	while(entry) {
-		last_entry = entry;
-		entry = entry->next;
-		rtpengine_hash_table_free_entry(last_entry);
-		last_entry = NULL;
-	}
-
-	return;
-}
-
 static void rtpengine_hash_table_free_row_lock(gen_lock_t *row_lock)
 {
 	if(!row_lock) {
@@ -526,33 +551,4 @@ static void rtpengine_hash_table_free_row_lock(gen_lock_t *row_lock)
 	lock_dealloc(row_lock);
 
 	return;
-}
-
-static int rtpengine_hash_table_sanity_checks(void)
-{
-	// check rtpengine hashtable
-	if(!rtpengine_hash_table) {
-		LM_ERR("NULL rtpengine_hash_table\n");
-		return 0;
-	}
-
-	// check rtpengine hashtable->row_locks
-	if(!rtpengine_hash_table->row_locks) {
-		LM_ERR("NULL rtpengine_hash_table->row_locks\n");
-		return 0;
-	}
-
-	// check rtpengine hashtable->row_entry_list
-	if(!rtpengine_hash_table->row_entry_list) {
-		LM_ERR("NULL rtpengine_hash_table->row_entry_list\n");
-		return 0;
-	}
-
-	// check rtpengine hashtable->row_totals
-	if(!rtpengine_hash_table->row_totals) {
-		LM_ERR("NULL rtpengine_hash_table->row_totals\n");
-		return 0;
-	}
-
-	return 1;
 }
