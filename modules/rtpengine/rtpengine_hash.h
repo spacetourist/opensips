@@ -46,12 +46,12 @@ int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash
 int rtpengine_hash_table_remove(str callid, str viabranch, enum rtpe_operation);
 struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rtpe_operation);
 
-void rtpengine_hash_table_print();
-unsigned int rtpengine_hash_table_total();
+void rtpengine_hash_table_print(void);
+unsigned int rtpengine_hash_table_total(void);
 
 void rtpengine_hash_table_free_entry(struct rtpengine_hash_entry *entry);
 static void rtpengine_hash_table_free_row_entry_list(struct rtpengine_hash_entry *row_entry_list);
 
-static int rtpengine_hash_table_sanity_checks();
+static int rtpengine_hash_table_sanity_checks(void);
 
 #endif

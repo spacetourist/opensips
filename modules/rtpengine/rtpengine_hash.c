@@ -403,7 +403,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 }
 
 // print hash table entries while deleting expired entries
-void rtpengine_hash_table_print()
+void rtpengine_hash_table_print(void)
 {
 	int i;
 	struct rtpengine_hash_entry *entry, *last_entry;
@@ -455,7 +455,7 @@ void rtpengine_hash_table_print()
 	}
 }
 
-unsigned int rtpengine_hash_table_total()
+unsigned int rtpengine_hash_table_total(void)
 {
 	int i;
 	unsigned int total = 0;
@@ -525,7 +525,7 @@ static void rtpengine_hash_table_free_row_lock(gen_lock_t *row_lock)
 	return;
 }
 
-static int rtpengine_hash_table_sanity_checks()
+static int rtpengine_hash_table_sanity_checks(void)
 {
 	// check rtpengine hashtable
 	if(!rtpengine_hash_table) {
