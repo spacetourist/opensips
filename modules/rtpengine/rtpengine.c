@@ -2481,7 +2481,7 @@ static struct rtpe_node *get_rtpe_node(str *node, struct rtpe_set *set)
 // state since the original allocation.
 static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rtpe_node *node, str viabranch, enum rtpe_operation op) {
 	// Check if we have an existing entry, if so no need to insert the entry into the hash table
-	if(!select_rtpe_node_assignment(ng_flags.call_id, viabranch, op)) {
+	if(select_rtpe_node_assignment(ng_flags.call_id, viabranch, op)) {
 		goto skip_hash_table_insert;
 	}
 
