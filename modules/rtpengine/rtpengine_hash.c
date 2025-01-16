@@ -251,7 +251,6 @@ int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash
 	struct rtpengine_hash_entry *new_entry = (struct rtpengine_hash_entry *)value;
 	unsigned int hash_index;
 
-	// sanity checks
 	if(!rtpengine_hash_table_sanity_checks()) {
 		LM_ERR("sanity checks failed\n");
 		return 0;
@@ -273,7 +272,8 @@ int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash
 
 	while(entry) {
 		// if found, don't add new entry
-		if(str_strcmp(&entry->callid, &new_entry->callid) && str_strcmp(&entry->viabranch, &new_entry->viabranch)) {
+		if(str_strcmp(&entry->callid, &new_entry->callid) == 0 &&
+		   str_strcmp(&entry->viabranch, &new_entry->viabranch) == 0) {
 			lock_release(rtpengine_hash_table->row_locks[hash_index]);
 			LM_NOTICE("callid=%.*s, viabranch=%.*s already in hashtable, ignore new value\n",
 					  entry->callid.len, entry->callid.s, entry->viabranch.len,
@@ -339,8 +339,9 @@ int rtpengine_hash_table_remove(str callid, str viabranch, enum rtpe_operation o
 
 	while(entry) {
 		// if callid found, delete entry
-		if((str_strcmp(&entry->callid, &callid) && str_strcmp(&entry->viabranch, &viabranch))
-		   || (str_strcmp(&entry->callid, &callid) && viabranch.len == 0 && op == OP_DELETE)) {
+		if((str_strcmp(&entry->callid, &callid) == 0 &&
+		    str_strcmp(&entry->viabranch, &viabranch) == 0)
+		   || (str_strcmp(&entry->callid, &callid) == 0 && viabranch.len == 0 && op == OP_DELETE)) {
 			// set pointers; exclude entry
 			last_entry->next = entry->next;
 
@@ -416,8 +417,9 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 
 	while(entry) {
 		// if callid found, return entry
-		if((str_strcmp(&entry->callid, &callid) && str_strcmp(&entry->viabranch, &viabranch))
-		   || (str_strcmp(&entry->callid, &callid) && viabranch.len == 0 && op == OP_DELETE)) {
+		if((str_strcmp(&entry->callid, &callid) == 0 &&
+		    str_strcmp(&entry->viabranch, &viabranch) == 0)
+		   || (str_strcmp(&entry->callid, &callid) == 0 && viabranch.len == 0 && op == OP_DELETE)) {
 			node = entry->node;
 
 			lock_release(rtpengine_hash_table->row_locks[hash_index]);
