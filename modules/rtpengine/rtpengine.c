@@ -2512,6 +2512,10 @@ static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rt
 			rtpengine_hash_table_free_entry(entry);
 			goto skip_hash_table_insert;
 		}
+	} else {
+		/* Force the viabranch pointer to be valid or at least NULL in a controlled way */
+		entry->viabranch.s = NULL;
+		entry->viabranch.len = 0;
 	}
 	entry->node = node;
 	entry->next = NULL;
