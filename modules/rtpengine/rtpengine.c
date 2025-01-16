@@ -2480,10 +2480,29 @@ static struct rtpe_node *get_rtpe_node(str *node, struct rtpe_set *set)
 // the basic node selection algorithm which will be consistent presuming no nodes have changed
 // state since the original allocation.
 static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rtpe_node *node, str viabranch, enum rtpe_operation op) {
+
+	// // todo remove Log function entry and relevant parameters
+	LM_DBG("Entering rtpengine_store_hash_entry: callid=%.*s, viabranch=%.*s, "
+		   "node=%.*s, op=%d\n",
+		   ng_flags.call_id.len, ng_flags.call_id.s,
+		   viabranch.len, viabranch.s,
+		   node->rn_url.len, node->rn_url.s,
+		   op);
+
+	// // todo remove Check if we have an existing entry, if so no need to insert the entry into the hash table
+	LM_DBG("Attempting to select existing node for callid=%.*s viabranch=%.*s\n",
+		   ng_flags.call_id.len, ng_flags.call_id.s,
+		   viabranch.len, viabranch.s);
+
 	// Check if we have an existing entry, if so no need to insert the entry into the hash table
 	if(select_rtpe_node_assignment(ng_flags.call_id, viabranch, op)) {
 		goto skip_hash_table_insert;
 	}
+
+	// todo remove
+	LM_DBG("No existing entry found; creating new hash entry for callid=%.*s viabranch=%.*s\n",
+		   ng_flags.call_id.len, ng_flags.call_id.s,
+		   viabranch.len, viabranch.s);
 
 	// The entry is not included in the hash table, build the entry..
 	struct rtpengine_hash_entry *entry = shm_malloc(sizeof(struct rtpengine_hash_entry));
@@ -2503,6 +2522,10 @@ static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rt
 				   ng_flags.call_id.s);
 			rtpengine_hash_table_free_entry(entry);
 			goto skip_hash_table_insert;
+		} else {
+			// todo remove
+			LM_DBG("Successfully duplicated callid=%.*s into hash entry\n",
+				   entry->callid.len, entry->callid.s);
 		}
 	}
 	if(viabranch.s && viabranch.len > 0) {
@@ -2511,9 +2534,14 @@ static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rt
 				   viabranch.len, viabranch.s);
 			rtpengine_hash_table_free_entry(entry);
 			goto skip_hash_table_insert;
+		} else {
+			// todo remove
+			LM_DBG("Successfully duplicated viabranch=%.*s into hash entry\n",
+				   entry->viabranch.len, entry->viabranch.s);
 		}
 	} else {
-		/* Force the viabranch pointer to be valid or at least NULL in a controlled way */
+		// // todo remove Force the viabranch pointer to be NULL when len=0
+		LM_DBG("No viabranch to store (len=0); setting entry->viabranch to NULL\n");
 		entry->viabranch.s = NULL;
 		entry->viabranch.len = 0;
 	}
@@ -2521,7 +2549,12 @@ static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rt
 	entry->next = NULL;
 	entry->tout = get_ticks() + hash_table_tout;
 
-	// ...insert the entry into the hashtable
+	// // todo remove ...insert the entry into the hashtable
+	LM_DBG("Inserting new hash entry: callid=%.*s, viabranch=%.*s, node=%.*s\n",
+		   entry->callid.len, entry->callid.s,
+		   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : ""),
+		   node->rn_url.len, node->rn_url.s);
+
 	if(!rtpengine_hash_table_insert(ng_flags.call_id, viabranch, entry)) {
 		LM_ERR("rtpengine hash table fail to insert node=%.*s for calllen=%d callid=%.*s viabranch=%.*s\n",
 			   node->rn_url.len, node->rn_url.s, ng_flags.call_id.len,
@@ -2538,6 +2571,11 @@ static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rt
 
 skip_hash_table_insert:
 	if(op == OP_DELETE) {
+		// todo remove
+		LM_DBG("Requested OP_DELETE: removing callid=%.*s, viabranch=%.*s from the hash table\n",
+			   ng_flags.call_id.len, ng_flags.call_id.s,
+			   viabranch.len, viabranch.s);
+
 		/* Delete the key<->value from the hashtable */
 		if(!rtpengine_hash_table_remove(ng_flags.call_id, viabranch, op)) {
 			LM_ERR("rtpengine hash table failed to remove entry for callid=%.*s viabranch=%.*s\n",
