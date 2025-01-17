@@ -2607,9 +2607,9 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 	memset(&ng_flags, 0, sizeof(ng_flags));
 	error.len = 0;
 
-	// initialise viabranch
-	ng_flags.viabranch.s = NULL;
-	ng_flags.viabranch.len = 0;
+	// todo remove? initialise viabranch
+//	ng_flags.viabranch.s = NULL;
+//	ng_flags.viabranch.len = 0;
 
 	if (!extra_dict) {
 		if (bencode_buffer_init(bencbuf)) {
