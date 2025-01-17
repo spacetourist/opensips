@@ -2552,7 +2552,7 @@ static void rtpengine_store_hash_entry(struct ng_flags_parse ng_flags, struct rt
 	// // todo remove ...insert the entry into the hashtable
 	LM_DBG("Inserting new hash entry: callid=%.*s, viabranch=%.*s, node=%.*s\n",
 		   entry->callid.len, entry->callid.s,
-		   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : ""),
+		   entry->viabranch.len, entry->viabranch.s,
 		   node->rn_url.len, node->rn_url.s);
 
 	if(!rtpengine_hash_table_insert(ng_flags.call_id, viabranch, entry)) {
@@ -2606,6 +2606,10 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 
 	memset(&ng_flags, 0, sizeof(ng_flags));
 	error.len = 0;
+
+	// initialise viabranch
+	ng_flags.viabranch.s = NULL;
+	ng_flags.viabranch.len = 0;
 
 	if (!extra_dict) {
 		if (bencode_buffer_init(bencbuf)) {
