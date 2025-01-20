@@ -395,7 +395,7 @@ int rtpengine_hash_table_remove(str callid, str viabranch, enum rtpe_operation o
 struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rtpe_operation op)
 {
 	// todo remove
-	LM_DBG("Lookup called with callid=%.*s, viabranch=%.*s, op=%d\n", callid.len, callid.s, viabranch.len, viabranch.s, op);
+	LM_INFO("Hash table lookup for: callid=%.*s, viabranch=%.*s, op=%d\n", callid.len, callid.s, viabranch.len, viabranch.s, op);
 	struct rtpengine_hash_entry *entry, *last_entry;
 	unsigned int hash_index;
 	struct rtpe_node *node;
@@ -419,7 +419,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 
 	while(entry) {
 		// todo remove
-		LM_DBG("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+		LM_INFO("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 		// if callid found, return entry
 		if((str_strcmp(&entry->callid, &callid) == 0 &&
 		    str_strcmp(&entry->viabranch, &viabranch) == 0)
@@ -434,7 +434,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 		// if expired entry discovered, delete it
 		if(entry->tout < get_ticks()) {
 			// todo remove
-			LM_DBG("Expired entry found: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+			LM_INFO("Expired entry found: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 			// set pointers; exclude entry
 			last_entry->next = entry->next;
 
@@ -444,7 +444,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 			// set pointers
 			entry = last_entry;
 			// todo remove
-			LM_DBG("Entry memory freed and iteration updated to last_entry\n");
+			LM_INFO("Entry memory freed and iteration updated to last_entry\n");
 			// update total
 			rtpengine_hash_table->row_totals[hash_index]--;
 		}
@@ -453,7 +453,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 		entry = entry->next;
 
 		// todo remove
-		LM_DBG("Lookup iteration completed for callid=%.*s, viabranch=%.*s\n", callid.len, callid.s, viabranch.len, viabranch.s);
+		LM_INFO("Lookup iteration completed for callid=%.*s, viabranch=%.*s\n", callid.len, callid.s, viabranch.len, viabranch.s);
 	}
 	// unlock
 	lock_release(rtpengine_hash_table->row_locks[hash_index]);

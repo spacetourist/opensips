@@ -2688,7 +2688,7 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 		cp = send_rtpe_command(node, ng_flags.dict, &ret);
 	} while (cp == NULL);
 	RTPE_STOP_READ();
-	LM_DBG("proxy reply: %.*s\n", ret, cp);
+	LM_INFO("proxy reply: %.*s\n", ret, cp);
 
 	/* store the value of the selected node */
 	if (spvar) {
@@ -2721,26 +2721,25 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 	if (use_hash_table) {
 //		rtpengine_store_hash_entry(ng_flags, node, viabranch, op);
 
-		// // todo remove Log function entry and relevant parameters
-		LM_DBG("Entering rtpengine_store_hash_entry: callid=%.*s, viabranch=%.*s, "
+		// // todo remove Log function entry and relevant parameters NOTE viabranch now bracket?!
+		LM_INFO("Entering rtpengine_store_hash_entry (checking if entry needs to be stored): callid=%.*s, viabranch=%.*s, "
 			   "node=%.*s, op=%d\n",
 			   ng_flags.call_id.len, ng_flags.call_id.s,
 			   viabranch.len, viabranch.s,
 			   node->rn_url.len, node->rn_url.s,
 			   op);
 
-		// // todo remove Check if we have an existing entry, if so no need to insert the entry into the hash table
-		LM_DBG("Attempting to select existing node for callid=%.*s viabranch=%.*s\n",
-			   ng_flags.call_id.len, ng_flags.call_id.s,
-			   viabranch.len, viabranch.s);
-
 		// Check if we have an existing entry, if so no need to insert the entry into the hash table
 		if(select_rtpe_node_assignment(ng_flags.call_id, viabranch, op)) {
+			// todo remove
+			LM_INFO("Existing entry found! skip hash entry creation for callid=%.*s viabranch=%.*s\n",
+					ng_flags.call_id.len, ng_flags.call_id.s,
+					viabranch.len, viabranch.s);
 			goto skip_hash_table_insert;
 		}
 
 		// todo remove
-		LM_DBG("No existing entry found; creating new hash entry for callid=%.*s viabranch=%.*s\n",
+		LM_INFO("No existing entry found; creating new hash entry for callid=%.*s viabranch=%.*s\n",
 			   ng_flags.call_id.len, ng_flags.call_id.s,
 			   viabranch.len, viabranch.s);
 
@@ -2764,7 +2763,7 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 				goto skip_hash_table_insert;
 			} else {
 				// todo remove
-				LM_DBG("Successfully duplicated callid=%.*s into hash entry\n",
+				LM_INFO("Successfully duplicated callid=%.*s into hash entry\n",
 					   entry->callid.len, entry->callid.s);
 			}
 		}
@@ -2776,12 +2775,12 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 				goto skip_hash_table_insert;
 			} else {
 				// todo remove
-				LM_DBG("Successfully duplicated viabranch=%.*s into hash entry\n",
+				LM_INFO("Successfully duplicated viabranch=%.*s into hash entry\n",
 					   entry->viabranch.len, entry->viabranch.s);
 			}
 		} else {
 			// // todo remove Force the viabranch pointer to be NULL when len=0
-			LM_DBG("No viabranch to store (len=0); setting entry->viabranch to NULL\n");
+			LM_INFO("No viabranch to store (len=0); setting entry->viabranch to NULL\n");
 			entry->viabranch.s = NULL;
 			entry->viabranch.len = 0;
 		}
@@ -2790,7 +2789,7 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 		entry->tout = get_ticks() + hash_table_tout;
 
 		// // todo remove ...insert the entry into the hashtable
-		LM_DBG("Inserting new hash entry: callid=%.*s, viabranch=%.*s, node=%.*s\n",
+		LM_INFO("Inserting new hash entry: callid=%.*s, viabranch=%.*s, node=%.*s\n",
 			   entry->callid.len, entry->callid.s,
 			   entry->viabranch.len, entry->viabranch.s,
 			   node->rn_url.len, node->rn_url.s);
@@ -2803,7 +2802,7 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 			rtpengine_hash_table_free_entry(entry);
 			goto skip_hash_table_insert;
 		} else {
-			LM_DBG("rtpengine hash table insert node=%.*s for callid=%.*s viabranch=%.*s\n",
+			LM_INFO("rtpengine hash table insert node=%.*s for callid=%.*s viabranch=%.*s\n",
 				   node->rn_url.len, node->rn_url.s,
 				   ng_flags.call_id.len, ng_flags.call_id.s, viabranch.len,
 				   viabranch.s);
@@ -2812,7 +2811,7 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 skip_hash_table_insert:
 		if(op == OP_DELETE) {
 			// todo remove
-			LM_DBG("Requested OP_DELETE: removing callid=%.*s, viabranch=%.*s from the hash table\n",
+			LM_INFO("Requested OP_DELETE: removing callid=%.*s, viabranch=%.*s from the hash table\n",
 				   ng_flags.call_id.len, ng_flags.call_id.s,
 				   viabranch.len, viabranch.s);
 
@@ -2822,7 +2821,7 @@ skip_hash_table_insert:
 					   ng_flags.call_id.len,
 					   ng_flags.call_id.s, viabranch.len, viabranch.s);
 			} else {
-				LM_DBG("rtpengine hash table remove entry for callid=%.*s viabranch=%.*s\n",
+				LM_INFO("rtpengine hash table remove entry for callid=%.*s viabranch=%.*s\n",
 					   ng_flags.call_id.len,
 					   ng_flags.call_id.s, viabranch.len, viabranch.s);
 			}
@@ -3205,11 +3204,11 @@ static struct rtpe_node *select_rtpe_node(str callid, str viabranch, enum rtpe_o
 	if (use_hash_table) {
 		node = select_rtpe_node_assignment(callid, viabranch, op);
 		if (node) {
-			LM_DBG("previous rtpengine node <%s> will continue to be used\n", node->rn_url.s);
+			LM_INFO("previous rtpengine node <%s> will continue to be used\n", node->rn_url.s);
 			return node;
 		} else {
 			// todo remove
-			LM_DBG("did not find previous rtpengine node, node will be selected by hash algo\n");
+			LM_INFO("did not find previous rtpengine node, node will be selected by hash algo\n");
 		}
 	}
 
@@ -3281,12 +3280,12 @@ static struct rtpe_node *select_rtpe_node_assignment(
 	node = rtpengine_hash_table_lookup(callid, viabranch, op);
 
 	if(!node) {
-		LM_DBG("rtpengine hash table lookup failed to find node for "
+		LM_INFO("rtpengine hash table lookup failed to find node for "
 			   "callid=%.*s viabranch=%.*s\n",
 			   callid.len, callid.s, viabranch.len, viabranch.s);
 		return NULL;
 	} else {
-		LM_DBG("rtpengine hash table lookup found node=%.*s for "
+		LM_INFO("rtpengine hash table lookup found node=%.*s for "
 			   "callid=%.*s viabranch=%.*s\n",
 			   node->rn_url.len, node->rn_url.s, callid.len,
 			   callid.s, viabranch.len, viabranch.s);
