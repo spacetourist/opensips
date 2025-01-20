@@ -281,22 +281,20 @@ int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash
 			return 0;
 		}
 
-		// if expired entry discovered, delete it
-		if(entry->tout < get_ticks()) {
-			// set pointers; exclude entry
+		// if expired entry discovered, delete it (never delete the sentinel node which maintains tout=-1)
+		if(entry->tout < get_ticks() && entry->tout >= 0) {
+			// set last entry pointer to exclude entry by pointing to the following entry (drop entry from chain)
 			last_entry->next = entry->next;
-
-			// free current entry; entry points to unknown
 			rtpengine_hash_table_free_entry(entry);
-
-			// set pointers
-			entry = last_entry;
-
-			// update total
+			// update total number of calls in this row
 			rtpengine_hash_table->row_totals[hash_index]--;
+			// after freeing entry, re-advance entry but don't move last_entry
+			entry = last_entry->next;
+			// skip `last_entry = entry;` since we haven't validated entry yet
+			continue;
 		}
 
-		// next entry in the list
+		// move to next entry in the list for next iteration
 		last_entry = entry;
 		entry = entry->next;
 	}
