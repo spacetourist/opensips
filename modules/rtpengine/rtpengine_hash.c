@@ -402,7 +402,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 
 	if(!rtpengine_hash_table_sanity_checks()) {
 		LM_ERR("sanity checks failed\n");
-		return 0;
+		return NULL;
 	}
 
 	// get first entry from entry list; jump over unused list head
@@ -414,7 +414,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 		lock_get(rtpengine_hash_table->row_locks[hash_index]);
 	} else {
 		LM_ERR("NULL rtpengine_hash_table->row_locks[%d]\n", hash_index);
-		return 0;
+		return NULL;
 	}
 
 	while(entry) {
