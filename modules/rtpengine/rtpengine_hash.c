@@ -429,22 +429,21 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 			return node;
 		}
 
-		// if expired entry discovered, delete it
-		if(entry->tout < get_ticks()) {
+		// if expired entry discovered, delete it (never delete the sentinel node which maintains tout=-1)
+		if(entry->tout < get_ticks() && entry->tout >= 0) {
 			// todo remove
 			LM_INFO("Expired entry found: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
-			// set pointers; exclude entry
+			// set last entry pointer to exclude entry by pointing to the following entry (drop entry from chain)
 			last_entry->next = entry->next;
-
-			// free current entry; entry points to unknown
 			rtpengine_hash_table_free_entry(entry);
-
-			// set pointers
-			entry = last_entry;
-			// todo remove
-			LM_INFO("Entry memory freed and iteration updated to last_entry\n");
-			// update total
+			// update total number of calls in this row
 			rtpengine_hash_table->row_totals[hash_index]--;
+			// after freeing entry, re-advance entry but don't move last_entry
+			entry = last_entry->next;
+			// todo remove
+			LM_INFO("Entry memory freed and iteration updated to last_entry->next\n");
+			// skip `last_entry = entry;` since we haven't validated entry yet
+			continue;
 		}
 
 		last_entry = entry;
