@@ -446,6 +446,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 			continue;
 		}
 
+		// move to next entry in the list for next iteration
 		last_entry = entry;
 		entry = entry->next;
 

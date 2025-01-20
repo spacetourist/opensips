@@ -2779,9 +2779,16 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 					   entry->viabranch.len, entry->viabranch.s);
 			}
 		} else {
-			// // todo remove Force the viabranch pointer to be NULL when len=0
-			LM_INFO("No viabranch to store (len=0); setting entry->viabranch to NULL\n");
-			entry->viabranch.s = NULL;
+			// todo remove
+			LM_INFO("No viabranch to store (len=0); setting entry->viabranch to empty\n");
+			// Allocate 1 byte for an empty string
+			entry->viabranch.s = shm_malloc(1);
+			if (!entry->viabranch.s) {
+				LM_ERR("rtpengine hash table fail to allocate single byte for viabranch\n");
+				rtpengine_hash_table_free_entry(entry);
+				goto skip_hash_table_insert;
+			}
+			entry->viabranch.s[0] = '\0';
 			entry->viabranch.len = 0;
 		}
 		entry->node = node;
