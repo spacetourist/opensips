@@ -305,6 +305,36 @@ int rtpengine_hash_table_insert(str callid, struct rtpengine_hash_entry *value)
 		// todo remove
 		LM_INFO("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 
+		LM_INFO("INSERT: callid=[%.*s], callid.len=%d", callid.len, callid.s, callid.len);
+		LM_INFO("INSERT NEW_ENTRY: new_entry->callid=[%.*s], len=%d", new_entry->callid.len, new_entry->callid.s, new_entry->callid.len);
+
+		LM_INFO("callid param len=%d : '%.*s'", callid.len, callid.len, callid.s);
+		for (int i=0; i<callid.len; i++) {
+			LM_INFO(" param[%d] = 0x%02X", i, (unsigned char)callid.s[i]);
+		}
+		LM_INFO("\n");
+
+		LM_INFO("new_entry->callid len=%d : '%.*s'", new_entry->callid.len, new_entry->callid.len, new_entry->callid.s);
+		for (int i=0; i<new_entry->callid.len; i++) {
+			LM_INFO(" new_entry[%d] = 0x%02X", i, (unsigned char)new_entry->callid.s[i]);
+		}
+		LM_INFO("\n");
+
+		int callid_cmp = str_strcmp(&entry->callid, &new_entry->callid);
+		int vb_cmp     = str_strcmp(&entry->viabranch, &new_entry->viabranch);
+
+		LM_INFO("Comparisons => callid_cmp=%d, viabranch_cmp=%d "
+			   "Stored callid:    [%.*s], len=%d "
+			   "Param  callid:    [%.*s], len=%d "
+			   "Stored viabranch: [%.*s], len=%d "
+			   "Param  viabranch: [%.*s], len=%d\n",
+			   callid_cmp, vb_cmp,
+			   entry->callid.len, (entry->callid.s ? entry->callid.s : "(null)"), entry->callid.len,
+				new_entry->callid.len, (new_entry->callid.s ? new_entry->callid.s : "(null)"), new_entry->callid.len,
+			   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : "(null)"), entry->viabranch.len,
+				new_entry->viabranch.len, (new_entry->viabranch.s ? new_entry->viabranch.s : "(null)"), new_entry->viabranch.len
+		);
+
 		// if found, don't add new entry
 		if(str_strcmp(&entry->callid, &new_entry->callid) == 0 &&
 		   str_strcmp(&entry->viabranch, &new_entry->viabranch) == 0) {
@@ -404,6 +434,8 @@ int rtpengine_hash_table_remove(str callid, str viabranch, enum rtpe_operation o
 
 		// if expired entry discovered, delete it
 		if(entry->tout < get_ticks()) {
+			LM_INFO("Expired entry found: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+
 			// set pointers; exclude entry
 			last_entry->next = entry->next;
 
@@ -460,6 +492,37 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 		// todo remove
 		LM_INFO("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 		LM_INFO("Lookup side: viabranch.len = %d, s='%.*s'", viabranch.len, viabranch.len, viabranch.s);
+
+		LM_INFO("LOOKUP: callid=[%.*s], callid.len=%d", callid.len, callid.s, callid.len);
+		LM_INFO("LOOKUP ENTRY: entry->callid=[%.*s], len=%d", entry->callid.len, entry->callid.s, entry->callid.len);
+
+		LM_INFO("callid param len=%d : '%.*s'", callid.len, callid.len, callid.s);
+		for (int i=0; i<callid.len; i++) {
+			LM_INFO(" param[%d] = 0x%02X", i, (unsigned char)callid.s[i]);
+		}
+		LM_INFO("\n");
+
+		LM_INFO("entry->callid len=%d : '%.*s'", entry->callid.len, entry->callid.len, entry->callid.s);
+		for (int i=0; i<entry->callid.len; i++) {
+			LM_INFO(" entry[%d] = 0x%02X", i, (unsigned char)entry->callid.s[i]);
+		}
+		LM_INFO("\n");
+
+		int callid_cmp = str_strcmp(&entry->callid, &callid);
+		int vb_cmp     = str_strcmp(&entry->viabranch, &viabranch);
+
+		LM_INFO("Comparisons => callid_cmp=%d, viabranch_cmp=%d "
+			   "Stored callid:    [%.*s], len=%d "
+			   "Param  callid:    [%.*s], len=%d "
+			   "Stored viabranch: [%.*s], len=%d "
+			   "Param  viabranch: [%.*s], len=%d\n",
+			   callid_cmp, vb_cmp,
+			   entry->callid.len, (entry->callid.s ? entry->callid.s : "(null)"), entry->callid.len,
+			   callid.len, (callid.s ? callid.s : "(null)"), callid.len,
+			   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : "(null)"), entry->viabranch.len,
+			   viabranch.len, (viabranch.s ? viabranch.s : "(null)"), viabranch.len
+		);
+
 		// if callid found, return entry
 		if((str_strcmp(&entry->callid, &callid) == 0 &&
 		    str_strcmp(&entry->viabranch, &viabranch) == 0)
@@ -528,6 +591,8 @@ void rtpengine_hash_table_print(void)
 		while(entry) {
 			// if expired entry discovered, delete it
 			if(entry->tout < get_ticks()) {
+				LM_INFO("Expired entry found: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+
 				// set pointers; exclude entry
 				last_entry->next = entry->next;
 
