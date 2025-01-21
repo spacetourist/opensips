@@ -523,10 +523,13 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 			   viabranch.len, (viabranch.s ? viabranch.s : "(null)"), viabranch.len
 		);
 
-		// if callid found, return entry
-		if((str_strcmp(&entry->callid, &callid) == 0 &&
-		    str_strcmp(&entry->viabranch, &viabranch) == 0)
-		   || (str_strcmp(&entry->callid, &callid) == 0 && viabranch.len == 0 && op == OP_DELETE)) {
+		// if callid found, return entry todo we skip the str compare when via are empty (otherwise we test uninit via and it returns -2)
+		if(
+			(str_strcmp(&entry->callid, &callid) == 0 && &entry->viabranch.len == 0 && &viabranch.len == 0)
+		   	||
+			(str_strcmp(&entry->callid, &callid) == 0 && str_strcmp(&entry->viabranch, &viabranch) == 0)
+		   	||
+		   (str_strcmp(&entry->callid, &callid) == 0 && viabranch.len == 0 && op == OP_DELETE)) {
 			node = entry->node;
 
 			lock_release(rtpengine_hash_table->row_locks[hash_index]);
