@@ -681,7 +681,7 @@ static const param_export_t params[] = {
 	{"socket_column",          STR_PARAM, &db_rtpe_sock_col.s        },
 	{"set_column",             STR_PARAM, &db_rtpe_set_col.s         },
 	{"notification_sock",      STR_PARAM|USE_FUNC_PARAM, (void *)rtpengine_set_notify},
-	{ "use_hash_table",        INT_PARAM, &use_hash_table         },
+	{"use_hash_table",        INT_PARAM, &use_hash_table         },
 	{"hash_table_tout",        INT_PARAM, &hash_table_tout        },
 	{"hash_table_size",        INT_PARAM, &hash_table_size        },
 	{0, 0, 0}
