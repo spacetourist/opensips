@@ -525,7 +525,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 
 		// if callid found, return entry todo we skip the str compare when via are empty (otherwise we test uninit via and it returns -2)
 		if(
-			(str_strcmp(&entry->callid, &callid) == 0 && &entry->viabranch.len == 0 && &viabranch.len == 0)
+			(str_strcmp(&entry->callid, &callid) == 0 && entry->viabranch.len == 0 && viabranch.len == 0)
 		   	||
 			(str_strcmp(&entry->callid, &callid) == 0 && str_strcmp(&entry->viabranch, &viabranch) == 0)
 		   	||
