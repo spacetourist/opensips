@@ -256,40 +256,15 @@ int rtpengine_hash_table_insert(str callid, struct rtpengine_hash_entry *value)
 		return 0;
 	}
 
-	// For safety, check if 'new_entry' is not NULL todo remove
+	// For safety, check if 'new_entry' is not NULL
 	if (!new_entry) {
 		LM_ERR("Cannot debug hash entry because 'new_entry' is NULL\n");
 		return 0;
 	}
 
-	// Also check if 'node' is not NULL before printing node->rn_url todo remove
-	LM_INFO("Debug rtpengine_hash_entry: "
-			  "callid=[%.*s], viabranch=[%.*s], node_url=[%.*s], "
-			  "tout=%u, next_ptr=%p",
-			  new_entry->callid.len,
-			  (new_entry->callid.s ? new_entry->callid.s : "(nullx)"),
-			  new_entry->viabranch.len,
-			  (new_entry->viabranch.s ? new_entry->viabranch.s : "(nullx)"),
-			  new_entry->node ? new_entry->node->rn_url.len : 0,
-			  new_entry->node && new_entry->node->rn_url.s ? new_entry->node->rn_url.s : "(nullx)",
-			  new_entry->tout,
-			  (void*)new_entry->next);
-
-	// todo remove
-	LM_INFO("Insert param callid: [%.*s] (len=%d).  new_entry->callid: [%.*s] (len=%d)",
-		   callid.len, callid.s, callid.len,
-		   new_entry->callid.len, new_entry->callid.s, new_entry->callid.len);
-
-	// todo remove
-	LM_INFO("Insertion side: new_entry->viabranch.len = %d, s='%.*s'",
-		   new_entry->viabranch.len, new_entry->viabranch.len, new_entry->viabranch.s);
-
 	// get entry list
 	hash_index = str_hash(callid);
 	entry = rtpengine_hash_table->row_entry_list[hash_index];
-
-	// todo remove
-	LM_INFO("INSERT: callid=[%.*s], hash_index=%u", callid.len, callid.s, hash_index);
 
 	// safeguarding check, ensure everything was properly initialised
 	if(entry == NULL || rtpengine_hash_table->row_locks[hash_index] == NULL) {
@@ -305,36 +280,6 @@ int rtpengine_hash_table_insert(str callid, struct rtpengine_hash_entry *value)
 		// todo remove
 		LM_INFO("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 
-		LM_INFO("INSERT: callid=[%.*s], callid.len=%d", callid.len, callid.s, callid.len);
-		LM_INFO("INSERT NEW_ENTRY: new_entry->callid=[%.*s], len=%d", new_entry->callid.len, new_entry->callid.s, new_entry->callid.len);
-
-		LM_INFO("callid param len=%d : '%.*s'", callid.len, callid.len, callid.s);
-		for (int i=0; i<callid.len; i++) {
-			LM_INFO(" param[%d] = 0x%02X", i, (unsigned char)callid.s[i]);
-		}
-		LM_INFO("\n");
-
-		LM_INFO("new_entry->callid len=%d : '%.*s'", new_entry->callid.len, new_entry->callid.len, new_entry->callid.s);
-		for (int i=0; i<new_entry->callid.len; i++) {
-			LM_INFO(" new_entry[%d] = 0x%02X", i, (unsigned char)new_entry->callid.s[i]);
-		}
-		LM_INFO("\n");
-
-		int callid_cmp = str_strcmp(&entry->callid, &new_entry->callid);
-		int vb_cmp     = str_strcmp(&entry->viabranch, &new_entry->viabranch);
-
-		LM_INFO("Comparisons => callid_cmp=%d, viabranch_cmp=%d "
-			   "Stored callid:    [%.*s], len=%d "
-			   "Param  callid:    [%.*s], len=%d "
-			   "Stored viabranch: [%.*s], len=%d "
-			   "Param  viabranch: [%.*s], len=%d\n",
-			   callid_cmp, vb_cmp,
-			   entry->callid.len, (entry->callid.s ? entry->callid.s : "(null)"), entry->callid.len,
-				new_entry->callid.len, (new_entry->callid.s ? new_entry->callid.s : "(null)"), new_entry->callid.len,
-			   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : "(null)"), entry->viabranch.len,
-				new_entry->viabranch.len, (new_entry->viabranch.s ? new_entry->viabranch.s : "(null)"), new_entry->viabranch.len
-		);
-
 		// if found, don't add new entry
 		if(str_strcmp(&entry->callid, &new_entry->callid) == 0 &&
 		   str_strcmp(&entry->viabranch, &new_entry->viabranch) == 0) {
@@ -347,8 +292,6 @@ int rtpengine_hash_table_insert(str callid, struct rtpengine_hash_entry *value)
 
 		// if expired entry discovered, delete it (never delete the sentinel node which maintains tout=-1)
 		if(entry->tout < get_ticks() && entry->tout >= 0) {
-			// todo remove
-			LM_INFO("Expiring lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 			// set last entry pointer to exclude entry by pointing to the following entry (drop entry from chain)
 			last_entry->next = entry->next;
 			rtpengine_hash_table_free_entry(entry);
@@ -460,8 +403,6 @@ int rtpengine_hash_table_remove(str callid, str viabranch, enum rtpe_operation o
 
 struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rtpe_operation op)
 {
-	// todo remove
-	LM_INFO("Hash table lookup for: callid=%.*s, viabranch=%.*s, op=%d\n", callid.len, callid.s, viabranch.len, viabranch.s, op);
 	struct rtpengine_hash_entry *entry, *last_entry;
 	unsigned int hash_index;
 	struct rtpe_node *node;
@@ -478,9 +419,6 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 	entry = rtpengine_hash_table->row_entry_list[hash_index];
 	last_entry = entry;
 
-	// todo remove
-	LM_INFO("LOOKUP: callid=[%.*s], hash_index=%u", callid.len, callid.s, hash_index);
-
 	if(rtpengine_hash_table->row_locks[hash_index]) {
 		lock_get(rtpengine_hash_table->row_locks[hash_index]);
 	} else {
@@ -491,37 +429,6 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 	while(entry) {
 		// todo remove
 		LM_INFO("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
-		LM_INFO("Lookup side: viabranch.len = %d, s='%.*s'", viabranch.len, viabranch.len, viabranch.s);
-
-		LM_INFO("LOOKUP: callid=[%.*s], callid.len=%d", callid.len, callid.s, callid.len);
-		LM_INFO("LOOKUP ENTRY: entry->callid=[%.*s], len=%d", entry->callid.len, entry->callid.s, entry->callid.len);
-
-		LM_INFO("callid param len=%d : '%.*s'", callid.len, callid.len, callid.s);
-		for (int i=0; i<callid.len; i++) {
-			LM_INFO(" param[%d] = 0x%02X", i, (unsigned char)callid.s[i]);
-		}
-		LM_INFO("\n");
-
-		LM_INFO("entry->callid len=%d : '%.*s'", entry->callid.len, entry->callid.len, entry->callid.s);
-		for (int i=0; i<entry->callid.len; i++) {
-			LM_INFO(" entry[%d] = 0x%02X", i, (unsigned char)entry->callid.s[i]);
-		}
-		LM_INFO("\n");
-
-		int callid_cmp = str_strcmp(&entry->callid, &callid);
-		int vb_cmp     = str_strcmp(&entry->viabranch, &viabranch);
-
-		LM_INFO("Comparisons => callid_cmp=%d, viabranch_cmp=%d "
-			   "Stored callid:    [%.*s], len=%d "
-			   "Param  callid:    [%.*s], len=%d "
-			   "Stored viabranch: [%.*s], len=%d "
-			   "Param  viabranch: [%.*s], len=%d\n",
-			   callid_cmp, vb_cmp,
-			   entry->callid.len, (entry->callid.s ? entry->callid.s : "(null)"), entry->callid.len,
-			   callid.len, (callid.s ? callid.s : "(null)"), callid.len,
-			   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : "(null)"), entry->viabranch.len,
-			   viabranch.len, (viabranch.s ? viabranch.s : "(null)"), viabranch.len
-		);
 
 		// if callid found, return entry todo we skip the str compare when via are empty (otherwise we test uninit via and it returns -2)
 		if(
@@ -548,8 +455,6 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 			rtpengine_hash_table->row_totals[hash_index]--;
 			// after freeing entry, re-advance entry but don't move last_entry
 			entry = last_entry->next;
-			// todo remove
-			LM_INFO("Entry memory freed and iteration updated to last_entry->next\n");
 			// skip `last_entry = entry;` since we haven't validated entry yet
 			continue;
 		}
@@ -557,9 +462,6 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 		// move to next entry in the list for next iteration
 		last_entry = entry;
 		entry = entry->next;
-
-		// todo remove
-		LM_INFO("Lookup iteration completed for callid=%.*s, viabranch=%.*s\n", callid.len, callid.s, viabranch.len, viabranch.s);
 	}
 	// unlock
 	lock_release(rtpengine_hash_table->row_locks[hash_index]);
