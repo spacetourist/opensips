@@ -1449,7 +1449,7 @@ static mi_response_t *mi_hashtable_dump(const mi_params_t *params,
 
 	// Dump the hash table size into the log
 	total = rtpengine_hash_table_total();
-	LM_DBG("hash_table_total=%d\n", total);
+	LM_INFO("hash_table_total=%d\n", total);
 
 	return init_mi_result_ok();
 }

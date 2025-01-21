@@ -496,7 +496,7 @@ void rtpengine_hash_table_print(void)
 		while(entry) {
 			// if expired entry discovered, delete it
 			if(entry->tout < get_ticks()) {
-				LM_INFO("Expired entry found: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+				LM_INFO("removing expired entry: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 
 				// set pointers; exclude entry
 				last_entry->next = entry->next;
@@ -510,7 +510,7 @@ void rtpengine_hash_table_print(void)
 				// update total
 				rtpengine_hash_table->row_totals[i]--;
 			} else {
-				LM_DBG("hash_index=%d callid=%.*s tout=%u\n", i,
+				LM_INFO("hash_index=%d callid=%.*s tout=%u\n", i,
 					   entry->callid.len, entry->callid.s,
 					   entry->tout - get_ticks());
 			}
