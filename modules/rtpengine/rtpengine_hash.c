@@ -277,8 +277,7 @@ int rtpengine_hash_table_insert(str callid, struct rtpengine_hash_entry *value)
 	lock_get(rtpengine_hash_table->row_locks[hash_index]);
 
 	while(entry) {
-		// todo remove
-		LM_INFO("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+		LM_DBG("iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 
 		// if found, don't add new entry
 		if(str_strcmp(&entry->callid, &new_entry->callid) == 0 &&
@@ -427,8 +426,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 	}
 
 	while(entry) {
-		// todo remove
-		LM_INFO("Iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+		LM_DBG("iterating lookup: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 
 		// if callid found, return entry todo we skip the str compare when via are empty (otherwise we test uninit via and it returns -2)
 		if(
@@ -446,8 +444,7 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 
 		// if expired entry discovered, delete it (never delete the sentinel node which maintains tout=-1)
 		if(entry->tout < get_ticks() && entry->tout >= 0) {
-			// todo remove
-			LM_INFO("Expired entry found: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
+			LM_DBG("removing expired entry: callid=%.*s, viabranch=%.*s, tout=%d\n", entry->callid.len, entry->callid.s, entry->viabranch.len, entry->viabranch.s, entry->tout);
 			// set last entry pointer to exclude entry by pointing to the following entry (drop entry from chain)
 			last_entry->next = entry->next;
 			rtpengine_hash_table_free_entry(entry);
