@@ -2725,7 +2725,8 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 		if(!entry) {
 			LM_ERR("rtpengine hash table fail to create entry for callid=%.*s viabranch=%.*s\n",
 				   ng_flags.call_id.len,
-				   ng_flags.call_id.s, ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(null)"));
+				   ng_flags.call_id.s, ng_flags.viabranch.len,
+				   (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(null)"));
 			goto skip_hash_table_insert;
 		}
 		memset(entry, 0, sizeof(struct rtpengine_hash_entry));
@@ -2781,13 +2782,17 @@ skip_hash_table_insert:
 		if(op == OP_DELETE) {
 			/* Delete the key<->value from the hashtable */
 			if(!rtpengine_hash_table_remove(ng_flags.call_id, ng_flags.viabranch, op)) {
-				LM_ERR("rtpengine hash table failed to remove entry for callid=%.*s viabranch=%.*s\n",
+				LM_ERR("rtpengine hash table failed to remove entry for callid=%.*s viabranch=%.*s, node=%.*s\n",
 					   ng_flags.call_id.len,
-					   ng_flags.call_id.s, ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(null)"));
+					   ng_flags.call_id.s, ng_flags.viabranch.len,
+					   (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(null)"),
+					   node->rn_url.len, node->rn_url.s);
 			} else {
-				LM_INFO("rtpengine hash table remove entry for callid=%.*s viabranch=%.*s\n",
+				LM_INFO("rtpengine hash table remove entry for callid=%.*s viabranch=%.*s, node=%.*s\n",
 					   ng_flags.call_id.len,
-					   ng_flags.call_id.s, ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(null)"));
+					   ng_flags.call_id.s, ng_flags.viabranch.len,
+					   (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(null)"),
+					   node->rn_url.len, node->rn_url.s);
 			}
 		}
 	}
