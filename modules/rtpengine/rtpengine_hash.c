@@ -245,7 +245,7 @@ int rtpengine_hash_table_destroy(void)
 	return 1;
 }
 
-int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash_entry *value)
+int rtpengine_hash_table_insert(str callid, struct rtpengine_hash_entry *value)
 {
 	struct rtpengine_hash_entry *entry, *last_entry;
 	struct rtpengine_hash_entry *new_entry = (struct rtpengine_hash_entry *)value;
@@ -255,6 +255,25 @@ int rtpengine_hash_table_insert(str callid, str viabranch, struct rtpengine_hash
 		LM_ERR("sanity checks failed\n");
 		return 0;
 	}
+
+	// For safety, check if 'new_entry' is not NULL todo remove
+	if (!new_entry) {
+		LM_ERR("Cannot debug hash entry because 'new_entry' is NULL\n");
+		return 0;
+	}
+
+	// Also check if 'node' is not NULL before printing node->rn_url todo remove
+	LM_NOTICE("Debug rtpengine_hash_entry: "
+			  "callid=[%.*s], viabranch=[%.*s], node_url=[%.*s], "
+			  "tout=%u, next_ptr=%p",
+			  new_entry->callid.len,
+			  (new_entry->callid.s ? new_entry->callid.s : "(nullx)"),
+			  new_entry->viabranch.len,
+			  (new_entry->viabranch.s ? new_entry->viabranch.s : "(nullx)"),
+			  new_entry->node ? new_entry->node->rn_url.len : 0,
+			  new_entry->node && new_entry->node->rn_url.s ? new_entry->node->rn_url.s : "(nullx)",
+			  new_entry->tout,
+			  (void*)new_entry->next);
 
 	// get entry list
 	hash_index = str_hash(callid);
@@ -404,6 +423,8 @@ struct rtpe_node *rtpengine_hash_table_lookup(str callid, str viabranch, enum rt
 	}
 
 	// get first entry from entry list; jump over unused list head
+	// todo review what actually gets put into this row - seems like the entry which is retrieved is empty?
+	// todo also, review why the existing failure doesn't allow call to proceed - should just fall back to hash calc??
 	hash_index = str_hash(callid);
 	entry = rtpengine_hash_table->row_entry_list[hash_index];
 	last_entry = entry;

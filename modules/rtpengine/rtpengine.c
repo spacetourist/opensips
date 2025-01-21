@@ -2494,10 +2494,6 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 	memset(&ng_flags, 0, sizeof(ng_flags));
 	error.len = 0;
 
-	// todo remove? initialise viabranch
-//	ng_flags.viabranch.s = NULL;
-//	ng_flags.viabranch.len = 0;
-
 	if (!extra_dict) {
 		if (bencode_buffer_init(bencbuf)) {
 			err = "could not initialize bencode_buffer_t";
@@ -2721,34 +2717,34 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 	if (use_hash_table) {
 //		rtpengine_store_hash_entry(ng_flags, node, viabranch, op);
 
-		// // todo remove Log function entry and relevant parameters NOTE viabranch now bracket?!
-		LM_INFO("Entering rtpengine_store_hash_entry (checking if entry needs to be stored): callid=%.*s, viabranch=%.*s, "
+		// // todo remove Log function entry and relevant parameters
+		LM_INFO("Checking if entry needs to be stored: callid=%.*s, viabranch=%.*s, "
 			   "node=%.*s, op=%d\n",
 			   ng_flags.call_id.len, ng_flags.call_id.s,
-			   viabranch.len, viabranch.s,
+				ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"),
 			   node->rn_url.len, node->rn_url.s,
 			   op);
 
 		// Check if we have an existing entry, if so no need to insert the entry into the hash table
-		if(select_rtpe_node_assignment(ng_flags.call_id, viabranch, op)) {
+		if(select_rtpe_node_assignment(ng_flags.call_id, ng_flags.viabranch, op)) {
 			// todo remove
 			LM_INFO("Existing entry found! skip hash entry creation for callid=%.*s viabranch=%.*s\n",
 					ng_flags.call_id.len, ng_flags.call_id.s,
-					viabranch.len, viabranch.s);
+					ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 			goto skip_hash_table_insert;
 		}
 
 		// todo remove
 		LM_INFO("No existing entry found; creating new hash entry for callid=%.*s viabranch=%.*s\n",
 			   ng_flags.call_id.len, ng_flags.call_id.s,
-			   viabranch.len, viabranch.s);
+				ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 
 		// The entry is not included in the hash table, build the entry...
 		struct rtpengine_hash_entry *entry = shm_malloc(sizeof(struct rtpengine_hash_entry));
 		if(!entry) {
 			LM_ERR("rtpengine hash table fail to create entry for callid=%.*s viabranch=%.*s\n",
 				   ng_flags.call_id.len,
-				   ng_flags.call_id.s, viabranch.len, viabranch.s);
+				   ng_flags.call_id.s, ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 			goto skip_hash_table_insert;
 		}
 		memset(entry, 0, sizeof(struct rtpengine_hash_entry));
@@ -2767,16 +2763,16 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 					   entry->callid.len, entry->callid.s);
 			}
 		}
-		if(viabranch.s && viabranch.len > 0) {
-			if(shm_str_dup(&entry->viabranch, &viabranch) < 0) {
+		if(ng_flags.viabranch.s && ng_flags.viabranch.len > 0) {
+			if(shm_str_dup(&entry->viabranch, &ng_flags.viabranch) < 0) {
 				LM_ERR("rtpengine hash table fail to duplicate viabranch=%.*s\n",
-					   viabranch.len, viabranch.s);
+					   ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 				rtpengine_hash_table_free_entry(entry);
 				goto skip_hash_table_insert;
 			} else {
 				// todo remove
 				LM_INFO("Successfully duplicated viabranch=%.*s into hash entry\n",
-					   entry->viabranch.len, entry->viabranch.s);
+					   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : "(nullx)"));
 			}
 		} else {
 			// todo remove
@@ -2798,21 +2794,21 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 		// // todo remove ...insert the entry into the hashtable
 		LM_INFO("Inserting new hash entry: callid=%.*s, viabranch=%.*s, node=%.*s\n",
 			   entry->callid.len, entry->callid.s,
-			   entry->viabranch.len, entry->viabranch.s,
+			   entry->viabranch.len, (entry->viabranch.s ? entry->viabranch.s : "(nullx)"),
 			   node->rn_url.len, node->rn_url.s);
 
-		if(!rtpengine_hash_table_insert(ng_flags.call_id, viabranch, entry)) {
+		if(!rtpengine_hash_table_insert(ng_flags.call_id, entry)) {
 			LM_ERR("rtpengine hash table fail to insert node=%.*s for calllen=%d callid=%.*s viabranch=%.*s\n",
 				   node->rn_url.len, node->rn_url.s, ng_flags.call_id.len,
-				   ng_flags.call_id.len, ng_flags.call_id.s, viabranch.len,
-				   viabranch.s);
+				   ng_flags.call_id.len, ng_flags.call_id.s, ng_flags.viabranch.len,
+				   (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 			rtpengine_hash_table_free_entry(entry);
 			goto skip_hash_table_insert;
 		} else {
 			LM_INFO("rtpengine hash table insert node=%.*s for callid=%.*s viabranch=%.*s\n",
 				   node->rn_url.len, node->rn_url.s,
-				   ng_flags.call_id.len, ng_flags.call_id.s, viabranch.len,
-				   viabranch.s);
+				   ng_flags.call_id.len, ng_flags.call_id.s, ng_flags.viabranch.len,
+				   (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 		}
 
 skip_hash_table_insert:
@@ -2820,17 +2816,17 @@ skip_hash_table_insert:
 			// todo remove
 			LM_INFO("Requested OP_DELETE: removing callid=%.*s, viabranch=%.*s from the hash table\n",
 				   ng_flags.call_id.len, ng_flags.call_id.s,
-				   viabranch.len, viabranch.s);
+					ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 
 			/* Delete the key<->value from the hashtable */
-			if(!rtpengine_hash_table_remove(ng_flags.call_id, viabranch, op)) {
+			if(!rtpengine_hash_table_remove(ng_flags.call_id, ng_flags.viabranch, op)) {
 				LM_ERR("rtpengine hash table failed to remove entry for callid=%.*s viabranch=%.*s\n",
 					   ng_flags.call_id.len,
-					   ng_flags.call_id.s, viabranch.len, viabranch.s);
+					   ng_flags.call_id.s, ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 			} else {
 				LM_INFO("rtpengine hash table remove entry for callid=%.*s viabranch=%.*s\n",
 					   ng_flags.call_id.len,
-					   ng_flags.call_id.s, viabranch.len, viabranch.s);
+					   ng_flags.call_id.s, ng_flags.viabranch.len, (ng_flags.viabranch.s ? ng_flags.viabranch.s : "(nullx)"));
 			}
 		}
 	}
